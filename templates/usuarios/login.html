@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Iniciar Sesión - Gestión Económica Familiar{% endblock %}
+
+{% block content %}
+<div class="min-h-[75vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-md w-full space-y-8 bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl shadow-xl shadow-cyan-950/5 dark:shadow-cyan-950/20 border border-slate-200/80 dark:border-slate-800">
+    
+    <!-- Header & Logo -->
+    <div class="text-center">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-600 via-cyan-500 to-cyan-300 mx-auto flex items-center justify-center text-white shadow-lg shadow-cyan-500/30 mb-4">
+        <i data-lucide="shield-check" class="w-8 h-8"></i>
+      </div>
+      <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+        Acceso Familiar
+      </h2>
+      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+        Introduce tus credenciales para acceder a la gestión económica
+      </p>
+    </div>
+
+    <!-- Error Messages -->
+    {% if form.errors %}
+    <div class="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-sm">
+      <div class="flex items-center space-x-2 font-medium">
+        <i data-lucide="alert-circle" class="w-4 h-4"></i>
+        <span>No se pudo iniciar sesión</span>
+      </div>
+      <p class="mt-1 text-xs">{{ form.non_field_errors.0|default:"Comprueba el correo electrónico y la contraseña." }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Formulario de Login -->
+    <form class="mt-6 space-y-6" method="POST" action="{% url 'usuarios:login' %}">
+      {% csrf_token %}
+      
+      <div class="space-y-4">
+        <div>
+          <label for="id_username" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+            Correo Electrónico
+          </label>
+          {{ form.username }}
+        </div>
+
+        <div>
+          <label for="id_password" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+            Contraseña
+          </label>
+          {{ form.password }}
+        </div>
+      </div>
+
+      <div>
+        <button type="submit" class="w-full flex items-center justify-center py-3 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-cyan-600 via-cyan-500 to-cyan-600 hover:from-cyan-500 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 shadow-md shadow-cyan-600/30 transition-all cursor-pointer">
+          <i data-lucide="log-in" class="w-4 h-4 mr-2"></i>
+          Iniciar Sesión
+        </button>
+      </div>
+    </form>
+
+    <div class="text-center text-xs text-slate-400">
+      <span>Sistema seguro protegido con CSRF y autenticación por token</span>
+    </div>
+  </div>
+</div>
+{% endblock %}

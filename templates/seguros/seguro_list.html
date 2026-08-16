@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión y Negociación de Seguros - Gestión Económica{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800">
+    <div>
+      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+        Pólizas de Seguros Familiares
+      </h1>
+      <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+        Control de vencimientos, auditoría de incremento interanual y preparación de ofertas para mediadores
+      </p>
+    </div>
+
+    <a href="{% url 'seguros:seguro_create' %}" class="inline-flex items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-600 shadow-sm shadow-cyan-600/30 transition-all">
+      <i data-lucide="plus-circle" class="w-4 h-4 mr-1.5"></i>
+      <span>Nueva Póliza</span>
+    </a>
+  </div>
+
+  <!-- KPI Metrics Bar -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+      <div>
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Coste Total Anual</span>
+        <div class="text-2xl font-black text-slate-900 dark:text-white mt-1">
+          {{ coste_total_anual|floatformat:2 }} <span class="text-sm font-medium text-slate-400">€/año</span>
+        </div>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+        <i data-lucide="shield" class="w-5 h-5"></i>
+      </div>
+    </div>
+
+    <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+      <div>
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Pólizas Vigentes</span>
+        <div class="text-2xl font-black text-slate-900 dark:text-white mt-1">
+          {{ num_polizas }} <span class="text-sm font-medium text-slate-400">contratos</span>
+        </div>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
+        <i data-lucide="file-check-2" class="w-5 h-5"></i>
+      </div>
+    </div>
+
+    <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+      <div>
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Renovaciones Urgentes</span>
+        <div class="text-2xl font-black {% if urgentes_count > 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %} mt-1">
+          {{ urgentes_count }} <span class="text-sm font-medium text-slate-400">en &le; 30 días</span>
+        </div>
+      </div>
+      <div class="w-10 h-10 rounded-xl {% if urgentes_count > 0 %}bg-rose-50 dark:bg-rose-950/60 text-rose-500{% else %}bg-emerald-50 dark:bg-emerald-950/60 text-emerald-500{% endif %} flex items-center justify-center">
+        <i data-lucide="bell-ring" class="w-5 h-5"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Seguros Table Grid -->
+  <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
+        <thead class="bg-slate-50/75 dark:bg-slate-800/50 text-slate-400 uppercase tracking-wider font-semibold">
+          <tr>
+            <th class="px-6 py-3.5">Ramo / Seguro</th>
+            <th class="px-6 py-3.5">Compañía y Póliza</th>
+            <th class="px-6 py-3.5">Mediador / Gestor</th>
+            <th class="px-6 py-3.5">Vencimiento</th>
+            <th class="px-6 py-3.5 text-right">Prima Actual</th>
+            <th class="px-6 py-3.5 text-right">Variación Interanual</th>
+            <th class="px-6 py-3.5 text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200/60 dark:divide-slate-800/60 bg-white dark:bg-slate-900">
+          {% for seguro in seguros %}
+          <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+            <!-- Ramo & Bien -->
+            <td class="px-6 py-4">
+              <div class="font-bold text-slate-900 dark:text-white text-sm">
+                {{ seguro.bien_asegurado }}
+              </div>
+              <span class="inline-flex items-center text-[11px] text-cyan-600 dark:text-cyan-400 font-medium">
+                {{ seguro.get_ramo_display }}
+              </span>
+            </td>
+
+            <!-- Compania y Numero -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="font-semibold text-slate-800 dark:text-slate-200">{{ seguro.compania }}</div>
+              <div class="text-[11px] text-slate-400">Nº {{ seguro.numero_poliza }}</div>
+            </td>
+
+            <!-- Gestor -->
+            <td class="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-300">
+              {% if seguro.gestor_nombre %}
+              <div class="font-medium">{{ seguro.gestor_nombre }}</div>
+              {% if seguro.gestor_telefono %}
+              <a href="tel:{{ seguro.gestor_telefono }}" class="text-[11px] text-cyan-600 dark:text-cyan-400 hover:underline flex items-center mt-0.5">
+                <i data-lucide="phone" class="w-3 h-3 mr-1"></i> {{ seguro.gestor_telefono }}
+              </a>
+              {% endif %}
+              {% else %}
+              <span class="text-slate-400">Sin mediador directo</span>
+              {% endif %}
+            </td>
+
+            <!-- Vencimiento con Badge de estado -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="font-medium text-slate-800 dark:text-slate-200">{{ seguro.fecha_vencimiento|date:"d M Y" }}</div>
+              {% if seguro.estado_vencimiento == 'urgente' %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 mt-1">
+                <i data-lucide="alert-triangle" class="w-2.5 h-2.5 mr-1"></i> Renovar en {{ seguro.dias_para_vencimiento }} días
+              </span>
+              {% elif seguro.estado_vencimiento == 'proximo' %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 mt-1">
+                <i data-lucide="clock" class="w-2.5 h-2.5 mr-1"></i> En {{ seguro.dias_para_vencimiento }} días
+              </span>
+              {% else %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 mt-1">
+                Vigente ({{ seguro.dias_para_vencimiento }}d)
+              </span>
+              {% endif %}
+            </td>
+
+            <!-- Prima Actual -->
+            <td class="px-6 py-4 whitespace-nowrap text-right font-black text-slate-900 dark:text-white text-sm">
+              {{ seguro.prima_actual|floatformat:2 }} €
+              <span class="block text-[10px] font-normal text-slate-400">{{ seguro.get_periodicidad_display }}</span>
+            </td>
+
+            <!-- Variación % de Estudio -->
+            <td class="px-6 py-4 whitespace-nowrap text-right">
+              {% if seguro.prima_anterior %}
+                {% if seguro.incremento_porcentaje > 0 %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                  +{{ seguro.incremento_porcentaje }}% (+{{ seguro.incremento_importe }}€)
+                </span>
+                {% elif seguro.incremento_porcentaje < 0 %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                  {{ seguro.incremento_porcentaje }}% ({{ seguro.incremento_importe }}€)
+                </span>
+                {% else %}
+                <span class="text-slate-400 text-xs font-medium">0.00% (Sin cambios)</span>
+                {% endif %}
+              {% else %}
+              <span class="text-slate-400 text-[11px]">Primer año</span>
+              {% endif %}
+            </td>
+
+            <!-- Acciones -->
+            <td class="px-6 py-4 whitespace-nowrap text-right space-x-1">
+              <a href="{% url 'seguros:seguro_detail' seguro.id %}" title="Ver Estudio & Historial" class="p-1.5 rounded-lg text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
+                <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+              </a>
+              <a href="{% url 'seguros:seguro_update' seguro.id %}" title="Editar" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 inline-block transition-colors">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              </a>
+              <form method="POST" action="{% url 'seguros:seguro_delete' seguro.id %}" class="inline-block" onsubmit="return confirm('¿Eliminar póliza de seguro?');">
+                {% csrf_token %}
+                <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="px-6 py-12 text-center text-slate-400">
+              <div class="flex flex-col items-center justify-center">
+                <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+                  <i data-lucide="shield-alert" class="w-6 h-6"></i>
+                </div>
+                <p class="font-medium text-sm text-slate-600 dark:text-slate-300">No hay pólizas registradas</p>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

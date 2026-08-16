@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Cuentas y Apuntes - {{ resumen.nombre_mes }} {{ anio_actual }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800">
+    <div>
+      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+        Libro Contable & Apuntes Mensuales
+      </h1>
+      <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+        Consulta, desglose y edición de apuntes organizados por categorías y periodos
+      </p>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center space-x-2.5">
+      <a href="{% url 'finanzas:ingreso_create' %}" class="inline-flex items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-600 shadow-sm shadow-cyan-600/30 transition-all cursor-pointer">
+        <i data-lucide="plus-circle" class="w-4 h-4 mr-1.5"></i>
+        <span>Añadir Ingreso</span>
+      </a>
+      <a href="{% url 'finanzas:gasto_create' %}" class="inline-flex items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 dark:from-slate-700 dark:to-slate-600 dark:hover:from-slate-600 dark:hover:to-slate-500 shadow-sm transition-all cursor-pointer">
+        <i data-lucide="minus-circle" class="w-4 h-4 mr-1.5"></i>
+        <span>Añadir Gasto</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Selector de Año y Pestañas de Meses (Reactivo con HTMX) -->
+  <div class="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+    
+    <!-- Barra Superior: Selector de Año y Navegación Mes Anterior/Siguiente -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
+      
+      <!-- Selector de Año -->
+      <div class="flex items-center space-x-2">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Ejercicio Anual:</span>
+        <div class="flex items-center space-x-1">
+          {% for a in anios_disponibles %}
+          <button 
+            type="button"
+            hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ a }}&mes={{ mes_actual }}"
+            hx-target="#cuentas-contenido-container"
+            onclick="updateActiveYear(this, {{ a }})"
+            class="year-btn px-3 py-1 rounded-lg text-xs font-bold transition-all {% if a == anio_actual %}bg-cyan-500 text-white shadow-sm shadow-cyan-500/30{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}"
+          >
+            {{ a }}
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Navegación de Mes Rápida -->
+      <div class="flex items-center space-x-2 text-xs">
+        <button 
+          type="button"
+          hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ resumen.prev_anio }}&mes={{ resumen.prev_mes }}"
+          hx-target="#cuentas-contenido-container"
+          class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center space-x-1 transition-colors"
+        >
+          <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+          <span>Mes Anterior</span>
+        </button>
+
+        <button 
+          type="button"
+          hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ resumen.next_anio }}&mes={{ resumen.next_mes }}"
+          hx-target="#cuentas-contenido-container"
+          class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center space-x-1 transition-colors"
+        >
+          <span>Mes Siguiente</span>
+          <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- 12 Pestañas de Meses -->
+    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+      {% for num_m, nom_m in meses_lista %}
+      <button 
+        type="button"
+        id="tab-mes-{{ num_m }}"
+        hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ anio_actual }}&mes={{ num_m }}"
+        hx-target="#cuentas-contenido-container"
+        onclick="updateActiveMonth(this)"
+        class="month-tab px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center space-x-1 {% if num_m == mes_actual %}bg-cyan-50 dark:bg-cyan-950/70 text-cyan-700 dark:text-cyan-400 border border-cyan-300 dark:border-cyan-700 shadow-sm{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/80{% endif %}"
+      >
+        <span>{{ nom_m }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+  </div>
+
+  <!-- Contenedor Dinámico HTMX para los datos del Mes -->
+  <div id="cuentas-contenido-container">
+    {% include "finanzas/partials/cuentas_mes.html" %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let currentSelectedYear = {{ anio_actual }};
+
+  function updateActiveMonth(btn) {
+    document.querySelectorAll('.month-tab').forEach(el => {
+      el.classList.remove('bg-cyan-50', 'dark:bg-cyan-950/70', 'text-cyan-700', 'dark:text-cyan-400', 'border', 'border-cyan-300', 'dark:border-cyan-700', 'shadow-sm');
+      el.classList.add('text-slate-600', 'dark:text-slate-400');
+    });
+    btn.classList.remove('text-slate-600', 'dark:text-slate-400');
+    btn.classList.add('bg-cyan-50', 'dark:bg-cyan-950/70', 'text-cyan-700', 'dark:text-cyan-400', 'border', 'border-cyan-300', 'dark:border-cyan-700', 'shadow-sm');
+  }
+
+  function updateActiveYear(btn, year) {
+    currentSelectedYear = year;
+    document.querySelectorAll('.year-btn').forEach(el => {
+      el.classList.remove('bg-cyan-500', 'text-white', 'shadow-sm', 'shadow-cyan-500/30');
+      el.classList.add('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
+    });
+    btn.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
+    btn.classList.add('bg-cyan-500', 'text-white', 'shadow-sm', 'shadow-cyan-500/30');
+
+    // Update month tabs hx-get URLs with the new year
+    document.querySelectorAll('.month-tab').forEach((tab, index) => {
+      const monthNum = index + 1;
+      tab.setAttribute('hx-get', `/cuentas/mes-htmx/?anio=${year}&mes=${monthNum}`);
+      htmx.process(tab);
+    });
+  }
+</script>
+{% endblock %}

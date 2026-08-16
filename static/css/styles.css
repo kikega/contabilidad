@@ -1,0 +1,68 @@
+/* Estilos personalizados y variables de tema Cyan para Tailwind CSS v4 */
+
+@layer theme {
+  :root {
+    --color-cyan-50: #ECFEFF;
+    --color-cyan-100: #CEFAFE;
+    --color-cyan-200: #A2F4FD;
+    --color-cyan-300: #53EAFD;
+    --color-cyan-400: #42D3F2;
+    --color-cyan-500: #3BB8DB;
+    --color-cyan-600: #2C92B8;
+    --color-cyan-700: #1A7595;
+    --color-cyan-800: #015F78;
+    --color-cyan-900: #104E64;
+    --color-cyan-950: #053345;
+  }
+}
+
+/* Transiciones suaves en cambio de modo */
+html {
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Tipografía moderna Inter / Outfit */
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+/* Estilos de scrollbar personalizados */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(59, 184, 219, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 184, 219, 0.6);
+}
+
+/* Indicador de carga HTMX */
+.htmx-indicator {
+  opacity: 0;
+  transition: opacity 200ms ease-in;
+}
+.htmx-request .htmx-indicator {
+  opacity: 1;
+}
+.htmx-request.htmx-indicator {
+  opacity: 1;
+}
+
+/* Animaciones suaves para tarjetas y modales */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

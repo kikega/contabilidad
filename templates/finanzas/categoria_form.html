@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}{% if object %}Editar Categoría{% else %}Nueva Categoría{% endif %} - Gestión Económica{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-6">
+  <div class="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+    
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-6 border-b border-slate-200/80 dark:border-slate-800">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+          <i data-lucide="tag" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-slate-900 dark:text-white">
+            {% if object %}Editar Categoría{% else %}Crear Nueva Categoría{% endif %}
+          </h2>
+          <p class="text-xs text-slate-400">Clasificador de ingresos, gastos y tarjetas familiares</p>
+        </div>
+      </div>
+
+      <a href="{% url 'finanzas:administracion' %}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </a>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" class="mt-6 space-y-5">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+            Nombre de la Categoría
+          </label>
+          {{ form.nombre }}
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+            Tipo de Flujo
+          </label>
+          {{ form.tipo }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+            Icono Lucide
+          </label>
+          {{ form.icono }}
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            {% for icon_name in "wallet,home,car,heart-pulse,shopping-cart,zap,utensils,folder,briefcase,landmark,credit-card,phone,tv,fuel,sparkles"|make_list %}
+            {% endfor %}
+            <button type="button" onclick="document.getElementById('id_icono').value='wallet'" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40">wallet</button>
+            <button type="button" onclick="document.getElementById('id_icono').value='home'" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40">home</button>
+            <button type="button" onclick="document.getElementById('id_icono').value='car'" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40">car</button>
+            <button type="button" onclick="document.getElementById('id_icono').value='shopping-cart'" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40">shopping-cart</button>
+            <button type="button" onclick="document.getElementById('id_icono').value='heart-pulse'" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40">heart-pulse</button>
+            <button type="button" onclick="document.getElementById('id_icono').value='zap'" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40">zap</button>
+            <button type="button" onclick="document.getElementById('id_icono').value='utensils'" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40">utensils</button>
+            <button type="button" onclick="document.getElementById('id_icono').value='folder'" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40">folder</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+            Color Identificativo
+          </label>
+          {{ form.color }}
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800">
+        {{ form.es_fijo }}
+        <label for="id_es_fijo" class="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+          ¿Representa por defecto conceptos fijos/recurrentes mensuales?
+        </label>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+          Descripción u Observaciones
+        </label>
+        {{ form.descripcion }}
+      </div>
+
+      <div class="pt-4 flex items-center justify-end space-x-3">
+        <a href="{% url 'finanzas:administracion' %}" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          Cancelar
+        </a>
+        <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-600 shadow-md shadow-cyan-600/30 transition-all cursor-pointer">
+          Guardar Categoría
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

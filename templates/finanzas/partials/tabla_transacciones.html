@@ -1,0 +1,128 @@
+{% load static %}
+
+<div class="overflow-x-auto">
+  <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
+    <thead class="bg-slate-50/75 dark:bg-slate-800/50 text-slate-400 uppercase tracking-wider font-semibold">
+      <tr>
+        <th scope="col" class="px-6 py-3.5">Tipo</th>
+        <th scope="col" class="px-6 py-3.5">Fecha</th>
+        <th scope="col" class="px-6 py-3.5">Concepto / Descripción</th>
+        <th scope="col" class="px-6 py-3.5">Categoría & Elemento</th>
+        <th scope="col" class="px-6 py-3.5">Titular</th>
+        <th scope="col" class="px-6 py-3.5 text-right">Importe</th>
+        <th scope="col" class="px-6 py-3.5 text-right">Acciones</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-200/60 dark:divide-slate-800/60 bg-white dark:bg-slate-900">
+      {% for mov in page_obj %}
+      <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+        <!-- Tipo Badge -->
+        <td class="px-6 py-4 whitespace-nowrap">
+          {% if mov.es_positivo %}
+          <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-800">
+            <i data-lucide="plus" class="w-3 h-3 mr-1"></i> Ingreso
+          </span>
+          {% else %}
+          <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            <i data-lucide="minus" class="w-3 h-3 mr-1"></i> Gasto
+          </span>
+          {% endif %}
+        </td>
+
+        <!-- Fecha -->
+        <td class="px-6 py-4 whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">
+          {{ mov.fecha|date:"d M Y" }}
+        </td>
+
+        <!-- Concepto -->
+        <td class="px-6 py-4 text-slate-900 dark:text-white font-medium">
+          {{ mov.concepto }}
+        </td>
+
+        <!-- Categoria & Elemento Pill -->
+        <td class="px-6 py-4 whitespace-nowrap">
+          <div class="flex flex-col space-y-0.5">
+            <span class="inline-flex items-center text-xs font-bold text-slate-800 dark:text-slate-200">
+              <span class="w-2 h-2 rounded-full mr-1.5" style="background-color: {{ mov.categoria_color|default:'#3BB8DB' }};"></span>
+              {{ mov.categoria }}
+            </span>
+            {% if mov.elemento %}
+            <span class="text-[11px] text-slate-400 pl-3.5 flex items-center">
+              <i data-lucide="{{ mov.icono|default:'tag' }}" class="w-3 h-3 mr-1"></i>
+              {{ mov.elemento }}
+            </span>
+            {% endif %}
+          </div>
+        </td>
+
+        <!-- Usuario -->
+        <td class="px-6 py-4 whitespace-nowrap text-slate-500 dark:text-slate-400">
+          {{ mov.usuario }}
+        </td>
+
+        <!-- Importe -->
+        <td class="px-6 py-4 whitespace-nowrap text-right font-bold {% if mov.es_positivo %}text-cyan-600 dark:text-cyan-400{% else %}text-slate-900 dark:text-white{% endif %} text-sm">
+          {% if mov.es_positivo %}+{% else %}-{% endif %}{{ mov.monto|floatformat:2 }} €
+        </td>
+
+        <!-- Acciones -->
+        <td class="px-6 py-4 whitespace-nowrap text-right text-xs font-medium space-x-1">
+          {% if mov.edit_url %}
+          <a href="{{ mov.edit_url }}" title="Editar" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
+            <i data-lucide="pencil" class="w-4 h-4"></i>
+          </a>
+          {% endif %}
+          {% if mov.delete_url %}
+          <form method="POST" action="{{ mov.delete_url }}" class="inline-block" onsubmit="return confirm('¿Estás seguro de eliminar este registro?');">
+            {% csrf_token %}
+            <button type="submit" title="Eliminar" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="7" class="px-6 py-12 text-center text-slate-400 dark:text-slate-500">
+          <div class="flex flex-col items-center justify-center space-y-2">
+            <i data-lucide="inbox" class="w-8 h-8 text-slate-300 dark:text-slate-600"></i>
+            <span>No se encontraron movimientos registrados en este periodo.</span>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Paginación con HTMX -->
+{% if page_obj.has_other_pages %}
+<div class="px-6 py-4 bg-slate-50/50 dark:bg-slate-800/20 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+  <div class="text-xs text-slate-500">
+    Mostrando página <span class="font-semibold text-slate-900 dark:text-white">{{ page_obj.number }}</span> de <span class="font-semibold text-slate-900 dark:text-white">{{ page_obj.paginator.num_pages }}</span>
+  </div>
+
+  <div class="flex items-center space-x-1">
+    {% if page_obj.has_previous %}
+    <button 
+      hx-get="{% url 'finanzas:tabla_transacciones_htmx' %}?page={{ page_obj.previous_page_number }}&tipo={{ tipo }}&anio={{ anio }}&mes={{ mes }}"
+      hx-target="#tabla-transacciones-container"
+      class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors"
+    >
+      Anterior
+    </button>
+    {% endif %}
+
+    {% if page_obj.has_next %}
+    <button 
+      hx-get="{% url 'finanzas:tabla_transacciones_htmx' %}?page={{ page_obj.next_page_number }}&tipo={{ tipo }}&anio={{ anio }}&mes={{ mes }}"
+      hx-target="#tabla-transacciones-container"
+      class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors"
+    >
+      Siguiente
+    </button>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
