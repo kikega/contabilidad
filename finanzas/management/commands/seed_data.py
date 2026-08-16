@@ -9,7 +9,15 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from finanzas.models import Categoria, Elemento, Gasto, GastoEspecialTarjeta, Ingreso
+from finanzas.models import (
+    Categoria,
+    CuentaAhorro,
+    Elemento,
+    Gasto,
+    GastoEspecialTarjeta,
+    Ingreso,
+    RegistroSaldoMensual,
+)
 from seguros.models import HistorialRenovacionSeguro, Seguro
 
 Usuario = get_user_model()
@@ -364,7 +372,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("✓ Compras especiales de tarjeta registradas."))
 
-        # 5. Pólizas de Seguros e Histórico de Renovaciones
+        # 5. Pólizas de Seguros vinculadas a Finanzas (Elementos & Gastos)
         seguro_auto_1, _ = Seguro.objects.get_or_create(
             numero_poliza="MAP-AUT-2024-8841",
             defaults={
@@ -377,24 +385,13 @@ class Command(BaseCommand):
                 "prima_anterior": Decimal("465.00"),
                 "fecha_inicio": date(2024, 3, 15),
                 "fecha_vencimiento": date(2026, 3, 15),
+                "gestor_nombre": "Javier Morales",
+                "gestor_telefono": "912 345 678",
+                "gestor_email": "jmorales@mapfre-agencia.es",
+                "notas_negociacion": "Todo riesgo con franquicia de 150€. Comparativa realizada con Línea Directa (ofrecían 450€ pero sin coche de sustitución).",
             },
         )
-
-        HistorialRenovacionSeguro.objects.get_or_create(
-            seguro=seguro_auto_1,
-            ejercicio_anio=2024,
-            defaults={"prima_pagada": Decimal("440.00"), "fecha_renovacion": date(2024, 3, 15)},
-        )
-        HistorialRenovacionSeguro.objects.get_or_create(
-            seguro=seguro_auto_1,
-            ejercicio_anio=2025,
-            defaults={"prima_pagada": Decimal("465.00"), "fecha_renovacion": date(2025, 3, 15)},
-        )
-        HistorialRenovacionSeguro.objects.get_or_create(
-            seguro=seguro_auto_1,
-            ejercicio_anio=2026,
-            defaults={"prima_pagada": Decimal("485.50"), "fecha_renovacion": date(2026, 3, 15)},
-        )
+        seguro_auto_1.sync_elemento()
 
         seguro_hogar, _ = Seguro.objects.get_or_create(
             numero_poliza="ALL-HOG-2023-9912",
@@ -408,26 +405,254 @@ class Command(BaseCommand):
                 "prima_anterior": Decimal("285.00"),
                 "fecha_inicio": date(2023, 6, 1),
                 "fecha_vencimiento": date(2026, 6, 1),
+                "gestor_nombre": "María Gómez",
+                "gestor_telefono": "918 765 432",
+                "gestor_email": "mgomez@allianz-seguros.com",
+                "notas_negociacion": "Continente 180.000€, Contenido 45.000€. Incluye daños por agua y asistencia jurídica.",
+            },
+        )
+        seguro_hogar.sync_elemento()
+
+        seguro_salud, _ = Seguro.objects.get_or_create(
+            numero_poliza="ADE-SAL-2024-5510",
+            defaults={
+                "usuario": titular2,
+                "ramo": Seguro.Ramo.SALUD,
+                "compania": "Adeslas",
+                "bien_asegurado": "Asistencia Médica Familiar (Carlos, Elena y 2 Hijos)",
+                "periodicidad": Seguro.Periodicidad.MENSUAL,
+                "prima_actual": Decimal("135.00"),
+                "prima_anterior": Decimal("128.00"),
+                "fecha_inicio": date(2024, 1, 1),
+                "fecha_vencimiento": date(2026, 12, 31),
+                "gestor_nombre": "Adeslas Atención Cliente",
+                "gestor_telefono": "900 505 040",
+                "notas_negociacion": "Cuota mensual de 135€ para 4 asegurados sin copagos. Incluye dental básico.",
+            },
+        )
+        seguro_salud.sync_elemento()
+
+        seguro_vida, _ = Seguro.objects.get_or_create(
+            numero_poliza="STA-VID-2022-7733",
+            defaults={
+                "usuario": titular1,
+                "ramo": Seguro.Ramo.VIDA,
+                "compania": "Santa Lucía",
+                "bien_asegurado": "Amortización Préstamo Hipotecario",
+                "periodicidad": Seguro.Periodicidad.ANUAL,
+                "prima_actual": Decimal("198.00"),
+                "prima_anterior": Decimal("190.00"),
+                "fecha_inicio": date(2022, 10, 10),
+                "fecha_vencimiento": date(2026, 10, 10),
+                "notas_negociacion": "Vinculado a la hipoteca. Cobertura de fallecimiento e invalidez absoluta.",
+            },
+        )
+        seguro_vida.sync_elemento()
+
+        # Historial de renovaciones archivadas
+        for seg, hists in [
+            (seguro_auto_1, [(2024, Decimal("440.00"), date(2024, 3, 15)), (2025, Decimal("465.00"), date(2025, 3, 15)), (2026, Decimal("485.50"), date(2026, 3, 15))]),
+            (seguro_hogar, [(2024, Decimal("275.00"), date(2024, 6, 1)), (2025, Decimal("285.00"), date(2025, 6, 1)), (2026, Decimal("295.00"), date(2026, 6, 1))]),
+            (seguro_vida, [(2024, Decimal("182.00"), date(2024, 10, 10)), (2025, Decimal("190.00"), date(2025, 10, 10)), (2026, Decimal("198.00"), date(2026, 10, 10))]),
+        ]:
+            for an, mon, fec in hists:
+                HistorialRenovacionSeguro.objects.get_or_create(
+                    seguro=seg,
+                    ejercicio_anio=an,
+                    defaults={"prima_pagada": mon, "fecha_renovacion": fec},
+                )
+
+        # Generar apuntes de Gasto reales para los seguros en 2025 y 2026
+        # 1. Seguro Auto (Marzo)
+        Gasto.objects.get_or_create(
+            usuario=titular1,
+            elemento=seguro_auto_1.elemento,
+            fecha=date(2025, 3, 15),
+            concepto="Recibo Anual Mapfre Seguros - Peugeot 3008",
+            defaults={"monto": Decimal("465.00"), "es_fijo": True, "notas": "Renovación ejercicio 2025"},
+        )
+        Gasto.objects.get_or_create(
+            usuario=titular1,
+            elemento=seguro_auto_1.elemento,
+            fecha=date(2026, 3, 15),
+            concepto="Recibo Anual Mapfre Seguros - Peugeot 3008",
+            defaults={"monto": Decimal("485.50"), "es_fijo": True, "notas": "Renovación ejercicio 2026 (+4.41%)"},
+        )
+
+        # 2. Seguro Hogar (Junio)
+        Gasto.objects.get_or_create(
+            usuario=titular1,
+            elemento=seguro_hogar.elemento,
+            fecha=date(2025, 6, 1),
+            concepto="Recibo Anual Allianz Seguros Hogar",
+            defaults={"monto": Decimal("285.00"), "es_fijo": True, "notas": "Renovación anual vivienda 2025"},
+        )
+        Gasto.objects.get_or_create(
+            usuario=titular1,
+            elemento=seguro_hogar.elemento,
+            fecha=date(2026, 6, 1),
+            concepto="Recibo Anual Allianz Seguros Hogar",
+            defaults={"monto": Decimal("295.00"), "es_fijo": True, "notas": "Renovación anual vivienda 2026 (+3.51%)"},
+        )
+
+        # 3. Seguro Salud (Mensual)
+        for an in [2025, 2026]:
+            lim_m = 12 if an < hoy.year else hoy.month
+            mon_salud = Decimal("128.00") if an == 2025 else Decimal("135.00")
+            for m in range(1, lim_m + 1):
+                Gasto.objects.get_or_create(
+                    usuario=titular2,
+                    elemento=seguro_salud.elemento,
+                    fecha=date(an, m, 1),
+                    concepto=f"Cuota Mensual Adeslas Salud ({m}/{an})",
+                    defaults={"monto": mon_salud, "es_fijo": True},
+                )
+
+        # 4. Seguro Vida (Octubre)
+        Gasto.objects.get_or_create(
+            usuario=titular1,
+            elemento=seguro_vida.elemento,
+            fecha=date(2025, 10, 10),
+            concepto="Recibo Anual Seguro Vida Hipoteca Santa Lucía",
+            defaults={"monto": Decimal("190.00"), "es_fijo": True},
+        )
+        if hoy.month >= 10 or hoy.year > 2026:
+            Gasto.objects.get_or_create(
+                usuario=titular1,
+                elemento=seguro_vida.elemento,
+                fecha=date(2026, 10, 10),
+                concepto="Recibo Anual Seguro Vida Hipoteca Santa Lucía",
+                defaults={"monto": Decimal("198.00"), "es_fijo": True},
+            )
+
+        self.stdout.write(self.style.SUCCESS("✓ Pólizas de seguros, elementos contables vinculados y gastos generados con éxito."))
+
+        # 6. Cuentas de Ahorro y Saldos Mensuales Consolidados
+        cuenta_emergencia, _ = CuentaAhorro.objects.get_or_create(
+            nombre="Fondo de Emergencia Familiar",
+            defaults={
+                "usuario": titular1,
+                "entidad": "MyInvestor",
+                "tipo": CuentaAhorro.Tipo.FONDO_EMERGENCIA,
+                "color": "#3BB8DB",
+                "icono": "shield-check",
+                "numero_cuenta_iban": "ES44 0000 1111 2222 3333",
+                "objetivo_monto": Decimal("15000.00"),
+                "notas": "Fondo para imprevistos equivalente a 6 meses de gastos fijos. Remunerada al 2.50% TAE.",
             },
         )
 
-        HistorialRenovacionSeguro.objects.get_or_create(
-            seguro=seguro_hogar,
-            ejercicio_anio=2024,
-            defaults={"prima_pagada": Decimal("275.00"), "fecha_renovacion": date(2024, 6, 1)},
-        )
-        HistorialRenovacionSeguro.objects.get_or_create(
-            seguro=seguro_hogar,
-            ejercicio_anio=2025,
-            defaults={"prima_pagada": Decimal("285.00"), "fecha_renovacion": date(2025, 6, 1)},
-        )
-        HistorialRenovacionSeguro.objects.get_or_create(
-            seguro=seguro_hogar,
-            ejercicio_anio=2026,
-            defaults={"prima_pagada": Decimal("295.00"), "fecha_renovacion": date(2026, 6, 1)},
+        cuenta_vacaciones, _ = CuentaAhorro.objects.get_or_create(
+            nombre="Hucha Vacaciones & Viajes",
+            defaults={
+                "usuario": titular2,
+                "entidad": "BBVA",
+                "tipo": CuentaAhorro.Tipo.AHORRO_OBJETIVO,
+                "color": "#10B981",
+                "icono": "plane",
+                "numero_cuenta_iban": "ES98 0182 4444 5555 6666",
+                "objetivo_monto": Decimal("3500.00"),
+                "notas": "Ahorro programado mensual para las vacaciones de verano e invierno.",
+            },
         )
 
-        self.stdout.write(self.style.SUCCESS("✓ Pólizas de seguros e histórico de renovaciones generados."))
+        cuenta_indexados, _ = CuentaAhorro.objects.get_or_create(
+            nombre="Cartera Fondos Indexados",
+            defaults={
+                "usuario": titular1,
+                "entidad": "Indexa Capital",
+                "tipo": CuentaAhorro.Tipo.INVERSION,
+                "color": "#8B5CF6",
+                "icono": "trending-up",
+                "numero_cuenta_iban": "ES21 0081 7777 8888 9999",
+                "objetivo_monto": Decimal("30000.00"),
+                "notas": "Inversión a largo plazo (Perfil 8/10). Aportación periódica mensual de 250€.",
+            },
+        )
+
+        cuenta_remunerada, _ = CuentaAhorro.objects.get_or_create(
+            nombre="Cuenta Remunerada Ahorro",
+            defaults={
+                "usuario": titular2,
+                "entidad": "Trade Republic",
+                "tipo": CuentaAhorro.Tipo.CUENTA_REMUNERADA,
+                "color": "#F59E0B",
+                "icono": "landmark",
+                "numero_cuenta_iban": "DE89 0000 9999 1111 2222",
+                "objetivo_monto": Decimal("10000.00"),
+                "notas": "Cuenta de ahorro con liquidación mensual de intereses al 3.25% TAE.",
+            },
+        )
+
+        # Saldos mensuales históricos en 2025
+        saldos_2025 = {
+            cuenta_emergencia: [
+                (1, Decimal("10000.00")), (2, Decimal("10300.00")), (3, Decimal("10650.00")), (4, Decimal("10950.00")),
+                (5, Decimal("11250.00")), (6, Decimal("11800.00")), (7, Decimal("12100.00")), (8, Decimal("12400.00")),
+                (9, Decimal("12700.00")), (10, Decimal("13000.00")), (11, Decimal("13300.00")), (12, Decimal("13800.00")),
+            ],
+            cuenta_vacaciones: [
+                (1, Decimal("600.00")), (2, Decimal("900.00")), (3, Decimal("1200.00")), (4, Decimal("1500.00")),
+                (5, Decimal("1800.00")), (6, Decimal("2600.00")), (7, Decimal("3200.00")), (8, Decimal("800.00")),
+                (9, Decimal("1100.00")), (10, Decimal("1400.00")), (11, Decimal("1700.00")), (12, Decimal("2000.00")),
+            ],
+            cuenta_indexados: [
+                (1, Decimal("14500.00")), (2, Decimal("14900.00")), (3, Decimal("15350.00")), (4, Decimal("15700.00")),
+                (5, Decimal("16200.00")), (6, Decimal("16750.00")), (7, Decimal("17100.00")), (8, Decimal("17500.00")),
+                (9, Decimal("17950.00")), (10, Decimal("18400.00")), (11, Decimal("18900.00")), (12, Decimal("19500.00")),
+            ],
+            cuenta_remunerada: [
+                (1, Decimal("4000.00")), (2, Decimal("4200.00")), (3, Decimal("4500.00")), (4, Decimal("4800.00")),
+                (5, Decimal("5000.00")), (6, Decimal("5300.00")), (7, Decimal("5600.00")), (8, Decimal("5900.00")),
+                (9, Decimal("6200.00")), (10, Decimal("6500.00")), (11, Decimal("6800.00")), (12, Decimal("7200.00")),
+            ],
+        }
+
+        for cta, saldos_mes in saldos_2025.items():
+            for m, sld in saldos_mes:
+                RegistroSaldoMensual.objects.get_or_create(
+                    cuenta=cta,
+                    anio=2025,
+                    mes=m,
+                    defaults={"saldo": sld},
+                )
+
+        # Saldos mensuales en 2026 (hasta mes actual o mes 8)
+        lim_m_2026 = 12 if hoy.year > 2026 else min(hoy.month, 12)
+        saldos_2026 = {
+            cuenta_emergencia: [
+                (1, Decimal("14100.00")), (2, Decimal("14400.00")), (3, Decimal("14700.00")), (4, Decimal("15000.00")),
+                (5, Decimal("15300.00")), (6, Decimal("15600.00")), (7, Decimal("15900.00")), (8, Decimal("16200.00")),
+                (9, Decimal("16500.00")), (10, Decimal("16800.00")), (11, Decimal("17100.00")), (12, Decimal("17500.00")),
+            ],
+            cuenta_vacaciones: [
+                (1, Decimal("2300.00")), (2, Decimal("2600.00")), (3, Decimal("2900.00")), (4, Decimal("3200.00")),
+                (5, Decimal("3500.00")), (6, Decimal("4200.00")), (7, Decimal("4800.00")), (8, Decimal("1200.00")),
+                (9, Decimal("1500.00")), (10, Decimal("1800.00")), (11, Decimal("2100.00")), (12, Decimal("2400.00")),
+            ],
+            cuenta_indexados: [
+                (1, Decimal("19950.00")), (2, Decimal("20400.00")), (3, Decimal("20850.00")), (4, Decimal("21300.00")),
+                (5, Decimal("21800.00")), (6, Decimal("22300.00")), (7, Decimal("22800.00")), (8, Decimal("23350.00")),
+                (9, Decimal("23900.00")), (10, Decimal("24500.00")), (11, Decimal("25100.00")), (12, Decimal("25700.00")),
+            ],
+            cuenta_remunerada: [
+                (1, Decimal("7500.00")), (2, Decimal("7800.00")), (3, Decimal("8100.00")), (4, Decimal("8400.00")),
+                (5, Decimal("8700.00")), (6, Decimal("9000.00")), (7, Decimal("9300.00")), (8, Decimal("9600.00")),
+                (9, Decimal("9900.00")), (10, Decimal("10200.00")), (11, Decimal("10500.00")), (12, Decimal("10800.00")),
+            ],
+        }
+
+        for cta, saldos_mes in saldos_2026.items():
+            for m, sld in saldos_mes:
+                if m <= lim_m_2026:
+                    RegistroSaldoMensual.objects.get_or_create(
+                        cuenta=cta,
+                        anio=2026,
+                        mes=m,
+                        defaults={"saldo": sld},
+                    )
+
+        self.stdout.write(self.style.SUCCESS("✓ Cuentas de ahorro y registros de saldos mensuales generados."))
 
         self.stdout.write(self.style.SUCCESS("\n========================================================================"))
         self.stdout.write(self.style.SUCCESS("🎉 ¡DATOS DE PRUEBA CARGADOS CON ÉXITO!"))
@@ -437,3 +662,4 @@ class Command(BaseCommand):
         self.stdout.write("* Titular 1:     carlos@familia.com |  Clave: familiar123")
         self.stdout.write("* Titular 2:     elena@familia.com  |  Clave: familiar123")
         self.stdout.write(self.style.SUCCESS("========================================================================\n"))
+

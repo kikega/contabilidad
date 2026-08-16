@@ -129,7 +129,7 @@
     // Update month tabs hx-get URLs with the new year
     document.querySelectorAll('.month-tab').forEach((tab, index) => {
       const monthNum = index + 1;
-      tab.setAttribute('hx-get', `/cuentas/mes-htmx/?anio=${year}&mes=${monthNum}`);
+      tab.setAttribute('hx-get', `{% url 'finanzas:cuentas_mes_htmx' %}?anio=${year}&mes=${monthNum}`);
       htmx.process(tab);
     });
   }

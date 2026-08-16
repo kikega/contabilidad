@@ -181,3 +181,123 @@ class FinanzasIntegrationTests(TestCase):
         response_delete = client.post(reverse("finanzas:elemento_delete", args=[elem.id]))
         self.assertEqual(response_delete.status_code, 302)
         self.assertFalse(Elemento.objects.filter(id=elem.id).exists())
+
+    def test_get_anios_disponibles_fallback_empty(self) -> None:
+        """Verifica que si no hay movimientos en la base de datos se devuelva al menos el año actual."""
+        hoy = timezone.now().date()
+        anios = FinanzasService.get_anios_disponibles()
+        self.assertEqual(anios, [hoy.year])
+
+    def test_get_anios_disponibles_dinamicos_segun_datos(self) -> None:
+        """Verifica que los años disponibles se extraigan dinámicamente de los ingresos y gastos existentes."""
+        from datetime import date
+        admin_user = Usuario.objects.create_user(email="test_anios@familia.com", password="password123")
+        cat = Categoria.objects.create(nombre="Test Cat", tipo=Categoria.Tipo.INGRESO)
+        elem = Elemento.objects.create(categoria=cat, nombre="Test Elem")
+
+        # Crear ingreso en 2023 y gasto en 2025
+        Ingreso.objects.create(
+            usuario=admin_user,
+            elemento=elem,
+            fecha=date(2023, 5, 10),
+            monto=Decimal("1000.00"),
+            descripcion="Ingreso 2023",
+        )
+        Gasto.objects.create(
+            usuario=admin_user,
+            elemento=elem,
+            fecha=date(2025, 8, 20),
+            monto=Decimal("200.00"),
+            concepto="Gasto 2025",
+        )
+
+        anios = FinanzasService.get_anios_disponibles()
+        self.assertEqual(anios, [2023, 2025])
+
+        # Verificar que la vista de Cuentas recibe exactamente [2023, 2025]
+        client = Client()
+        client.force_login(admin_user)
+        response = client.get(reverse("finanzas:cuentas"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["anios_disponibles"], [2023, 2025])
+
+    def test_cuentas_ahorro_model_and_resumen_service(self) -> None:
+        """Verifica la creación de cuentas de ahorro, registro de saldos y cálculo del resumen anual."""
+        from finanzas.models import CuentaAhorro, RegistroSaldoMensual
+        carlos = Usuario.objects.create_user(email="carlos_ahorro@familia.com", password="password123")
+
+        cuenta = CuentaAhorro.objects.create(
+            usuario=carlos,
+            nombre="Fondo Emergencia Test",
+            entidad="MyInvestor",
+            tipo=CuentaAhorro.Tipo.FONDO_EMERGENCIA,
+            objetivo_monto=Decimal("10000.00"),
+        )
+
+        RegistroSaldoMensual.objects.create(cuenta=cuenta, anio=2026, mes=1, saldo=Decimal("5000.00"))
+        RegistroSaldoMensual.objects.create(cuenta=cuenta, anio=2026, mes=2, saldo=Decimal("5500.00"))
+
+        self.assertEqual(cuenta.get_saldo_mes(2026, 1), Decimal("5000.00"))
+        self.assertEqual(cuenta.get_saldo_mes(2026, 2), Decimal("5500.00"))
+        self.assertIsNone(cuenta.get_saldo_mes(2026, 3))
+        self.assertEqual(cuenta.get_ultimo_saldo().saldo, Decimal("5500.00"))
+
+        # Probar el servicio anual
+        resumen = FinanzasService.get_resumen_ahorros_anual(anio=2026)
+        self.assertEqual(resumen["kpis"]["total_ahorro_actual"], Decimal("5500.00"))
+        self.assertEqual(resumen["kpis"]["crecimiento_anio_importe"], Decimal("500.00"))
+        self.assertEqual(resumen["kpis"]["crecimiento_anio_porcentaje"], Decimal("10.00"))
+        self.assertEqual(len(resumen["filas_cuentas"]), 1)
+
+    def test_ahorros_view_and_htmx_endpoints(self) -> None:
+        """Verifica la página de Ahorros, el guardado reactivo de saldos HTMX y el CRUD de cuentas."""
+        from finanzas.models import CuentaAhorro, RegistroSaldoMensual
+        carlos = Usuario.objects.create_user(email="carlos_view@familia.com", password="password123")
+
+        client = Client()
+        client.force_login(carlos)
+
+        # 1. Crear cuenta de ahorro mediante vista CreateView
+        response_create = client.post(
+            reverse("finanzas:cuenta_ahorro_create"),
+            {
+                "nombre": "Hucha Viaje Japón",
+                "entidad": "Revolut",
+                "tipo": CuentaAhorro.Tipo.AHORRO_OBJETIVO,
+                "color": "#10B981",
+                "icono": "plane",
+                "objetivo_monto": "4000.00",
+                "activo": True,
+            },
+        )
+        self.assertEqual(response_create.status_code, 302)
+        cuenta = CuentaAhorro.objects.get(nombre="Hucha Viaje Japón")
+        self.assertEqual(cuenta.entidad, "Revolut")
+
+        # 2. Cargar la vista principal de Ahorros
+        response_list = client.get(reverse("finanzas:ahorros"), {"anio": "2026"})
+        self.assertEqual(response_list.status_code, 200)
+        self.assertContains(response_list, "Control de Cuentas de Ahorro")
+        self.assertContains(response_list, "Hucha Viaje Japón")
+
+        # 3. Guardar saldo mensual mediante endpoint HTMX
+        response_htmx = client.post(
+            reverse("finanzas:guardar_saldo_mes_htmx"),
+            {
+                "cuenta_id": str(cuenta.id),
+                "anio": "2026",
+                "mes": "3",
+                "saldo": "1250.50",
+                "notas": "Aportación marzo",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+        self.assertEqual(response_htmx.status_code, 200)
+        self.assertIn("HX-Trigger", response_htmx.headers)
+
+        # Verificar que el registro se guardó
+        reg = RegistroSaldoMensual.objects.get(cuenta=cuenta, anio=2026, mes=3)
+        self.assertEqual(reg.saldo, Decimal("1250.50"))
+        self.assertEqual(reg.notas, "Aportación marzo")
+
+

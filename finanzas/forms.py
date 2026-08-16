@@ -243,3 +243,69 @@ class FiltroFinanzasForm(forms.Form):
             }
         ),
     )
+
+
+class CuentaAhorroForm(forms.ModelForm):
+    """Formulario para crear y editar cuentas, fondos o huchas de ahorro."""
+
+    class Meta:
+        from finanzas.models import CuentaAhorro
+        model = CuentaAhorro
+        fields = [
+            "nombre",
+            "entidad",
+            "tipo",
+            "color",
+            "icono",
+            "numero_cuenta_iban",
+            "objetivo_monto",
+            "activo",
+            "notas",
+        ]
+        widgets = {
+            "nombre": forms.TextInput(
+                attrs={"class": INPUT_CLASSES, "placeholder": "Ej: Fondo de Emergencia, Ahorro Vacaciones..."}
+            ),
+            "entidad": forms.TextInput(
+                attrs={"class": INPUT_CLASSES, "placeholder": "Ej: MyInvestor, Trade Republic, Santander, Openbank..."}
+            ),
+            "tipo": forms.Select(attrs={"class": SELECT_CLASSES}),
+            "color": forms.TextInput(
+                attrs={"class": "h-10 w-full p-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer", "type": "color"}
+            ),
+            "icono": forms.TextInput(
+                attrs={"class": INPUT_CLASSES, "placeholder": "Ej: piggy-bank, landmark, trending-up, wallet, vault..."}
+            ),
+            "numero_cuenta_iban": forms.TextInput(
+                attrs={"class": INPUT_CLASSES, "placeholder": "ES00 0000 0000 0000 0000 (opcional)"}
+            ),
+            "objetivo_monto": forms.NumberInput(
+                attrs={"class": INPUT_CLASSES, "placeholder": "Meta en € (opcional)", "step": "0.01", "min": "0.00"}
+            ),
+            "activo": forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
+            "notas": forms.Textarea(
+                attrs={"class": INPUT_CLASSES, "rows": 3, "placeholder": "Condiciones, rentabilidad % o notas de la cuenta..."}
+            ),
+        }
+
+
+class RegistroSaldoMensualForm(forms.Form):
+    """Formulario para registrar o actualizar el saldo de un mes concreto."""
+
+    cuenta_id = forms.IntegerField(widget=forms.HiddenInput())
+    anio = forms.IntegerField(widget=forms.HiddenInput())
+    mes = forms.IntegerField(widget=forms.HiddenInput())
+    saldo = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        widget=forms.NumberInput(
+            attrs={"class": "w-28 text-right px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none", "step": "0.01", "min": "0.00"}
+        ),
+    )
+    notas = forms.CharField(
+        required=False,
+        widget=forms.TextInput(
+            attrs={"class": INPUT_CLASSES, "placeholder": "Notas del mes (opcional)"}
+        ),
+    )
+

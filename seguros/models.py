@@ -36,6 +36,14 @@ class Seguro(models.Model):
         related_name="seguros",
         verbose_name=_("titular o responsable"),
     )
+    elemento = models.OneToOneField(
+        "finanzas.Elemento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="seguro",
+        verbose_name=_("elemento contable vinculado"),
+    )
     ramo = models.CharField(
         _("tipo / ramo de seguro"),
         max_length=30,
@@ -117,6 +125,17 @@ class Seguro(models.Model):
     creado_en = models.DateTimeField(_("creado en"), auto_now_add=True)
     actualizado_en = models.DateTimeField(_("actualizado en"), auto_now=True)
 
+    RAMO_ICONOS = {
+        Ramo.HOGAR: "home",
+        Ramo.COCHE: "car",
+        Ramo.SALUD: "heart-pulse",
+        Ramo.VIDA: "shield",
+        Ramo.DECESOS: "shield",
+        Ramo.RESPONSABILIDAD_CIVIL: "scale",
+        Ramo.MASCOTAS: "paw-print",
+        Ramo.OTROS: "shield-check",
+    }
+
     class Meta:
         verbose_name = _("seguro")
         verbose_name_plural = _("seguros")
@@ -127,6 +146,103 @@ class Seguro(models.Model):
 
     def __str__(self) -> str:
         return f"{self.get_ramo_display()} - {self.compania} ({self.bien_asegurado}) - {self.prima_actual}€"
+
+    def sync_elemento(self) -> Any:
+        """Sincroniza o genera el Elemento contable correspondiente bajo la categoría Seguros."""
+        from finanzas.models import Categoria, Elemento
+
+        cat_seguros, _ = Categoria.objects.get_or_create(
+            nombre="Seguros",
+            tipo=Categoria.Tipo.GASTO,
+            defaults={
+                "icono": "shield-check",
+                "color": "#2C92B8",
+                "descripcion": "Pólizas de protección familiar, hogar y vehículos",
+            },
+        )
+
+        nombre_elem = f"{self.compania} - {self.bien_asegurado}".strip()
+        icono_elem = self.RAMO_ICONOS.get(self.ramo, "shield-check")
+        desc_elem = f"Póliza {self.numero_poliza} ({self.get_ramo_display()})"
+
+        if self.elemento_id:
+            elem = self.elemento
+            elem.categoria = cat_seguros
+            elem.nombre = nombre_elem
+            elem.icono = icono_elem
+            elem.descripcion = desc_elem
+            elem.es_fijo = True
+            elem.save()
+        else:
+            elem = Elemento.objects.filter(categoria=cat_seguros, nombre=nombre_elem).first()
+            if not elem:
+                elem = Elemento.objects.create(
+                    categoria=cat_seguros,
+                    nombre=nombre_elem,
+                    icono=icono_elem,
+                    descripcion=desc_elem,
+                    es_fijo=True,
+                )
+            else:
+                elem.icono = icono_elem
+                elem.descripcion = desc_elem
+                elem.es_fijo = True
+                elem.save()
+            self.elemento = elem
+
+        return self.elemento
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        super().save(*args, **kwargs)
+        # Sincronizar el elemento contable asociado si no existe o ha cambiado
+        nombre_esperado = f"{self.compania} - {self.bien_asegurado}".strip()
+        if not self.elemento_id or self.elemento.nombre != nombre_esperado:
+            self.sync_elemento()
+            super().save(update_fields=["elemento"])
+
+    def get_gastos(self) -> Any:
+        """Devuelve el queryset de apuntes de gastos registrados asociados a esta póliza."""
+        if not self.elemento_id:
+            from finanzas.models import Gasto
+            return Gasto.objects.none()
+        return self.elemento.gastos.select_related("usuario").order_by("-fecha")
+
+    def get_resumen_gastos_anuales(self) -> list:
+        """Agrupa los gastos reales pagados por año para análisis comparativo interanual."""
+        from django.db.models import Count, Sum
+        if not self.elemento_id:
+            return []
+
+        qs = (
+            self.elemento.gastos.values("fecha__year")
+            .annotate(total=Sum("monto"), num_pagos=Count("id"))
+            .order_by("-fecha__year")
+        )
+
+        resumen = []
+        lista = list(qs)
+        for i, item in enumerate(lista):
+            anio = item["fecha__year"]
+            total = item["total"] or Decimal("0.00")
+
+            prev_total = None
+            var_importe = Decimal("0.00")
+            var_porcentaje = Decimal("0.00")
+            if i + 1 < len(lista):
+                prev_total = lista[i + 1]["total"] or Decimal("0.00")
+                var_importe = (total - prev_total).quantize(Decimal("0.01"))
+                if prev_total > Decimal("0.00"):
+                    var_porcentaje = (((total - prev_total) / prev_total) * Decimal("100.00")).quantize(Decimal("0.01"))
+
+            resumen.append({
+                "anio": anio,
+                "total": total,
+                "num_pagos": item["num_pagos"],
+                "prev_total": prev_total,
+                "var_importe": var_importe,
+                "var_porcentaje": var_porcentaje,
+            })
+        return resumen
 
     @property
     def incremento_importe(self) -> Decimal:

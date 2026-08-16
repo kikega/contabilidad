@@ -3,9 +3,13 @@
 from django.urls import path
 from finanzas.views import (
     AdministracionView,
+    AhorrosListView,
     CategoriaCreateView,
     CategoriaDeleteView,
     CategoriaUpdateView,
+    CuentaAhorroCreateView,
+    CuentaAhorroDeleteView,
+    CuentaAhorroUpdateView,
     CuentasMesHtmxView,
     CuentasView,
     DashboardView,
@@ -19,9 +23,11 @@ from finanzas.views import (
     GastoEspecialTarjetaListView,
     GastoUpdateView,
     GraficosDataApiView,
+    GuardarSaldoMensualHtmxView,
     IngresoCreateView,
     IngresoDeleteView,
     IngresoUpdateView,
+    MatrizAhorrosHtmxView,
     TransaccionesTablaHtmxView,
 )
 
@@ -32,6 +38,12 @@ urlpatterns = [
     path("", DashboardView.as_view(), name="dashboard"),
     path("cuentas/", CuentasView.as_view(), name="cuentas"),
     path("cuentas/mes-htmx/", CuentasMesHtmxView.as_view(), name="cuentas_mes_htmx"),
+    path("ahorros/", AhorrosListView.as_view(), name="ahorros"),
+    path("ahorros/matriz-htmx/", MatrizAhorrosHtmxView.as_view(), name="ahorros_matriz_htmx"),
+    path("ahorros/guardar-saldo-htmx/", GuardarSaldoMensualHtmxView.as_view(), name="guardar_saldo_mes_htmx"),
+    path("ahorros/cuentas/nueva/", CuentaAhorroCreateView.as_view(), name="cuenta_ahorro_create"),
+    path("ahorros/cuentas/<int:pk>/editar/", CuentaAhorroUpdateView.as_view(), name="cuenta_ahorro_update"),
+    path("ahorros/cuentas/<int:pk>/eliminar/", CuentaAhorroDeleteView.as_view(), name="cuenta_ahorro_delete"),
     path("administracion/", AdministracionView.as_view(), name="administracion"),
     
     # Categorías
@@ -62,3 +74,4 @@ urlpatterns = [
     path("tarjetas/nuevo/", GastoEspecialTarjetaCreateView.as_view(), name="tarjeta_create"),
     path("tarjetas/<int:pk>/eliminar/", GastoEspecialTarjetaDeleteView.as_view(), name="tarjeta_delete"),
 ]
+

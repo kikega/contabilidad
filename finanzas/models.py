@@ -298,3 +298,120 @@ class GastoEspecialTarjeta(models.Model):
 
     def __str__(self) -> str:
         return f"{self.comercio} ({self.get_tipo_comercio_display()}) - {self.monto}€ [{self.tarjeta}]"
+
+
+class CuentaAhorro(models.Model):
+    """Cuenta, hucha o depósito destinado a la acumulación de ahorro o inversión."""
+
+    class Tipo(models.TextChoices):
+        FONDO_EMERGENCIA = "FONDO_EMERGENCIA", _("Fondo de Emergencia")
+        AHORRO_OBJETIVO = "AHORRO_OBJETIVO", _("Ahorro para Objetivos / Metas")
+        CUENTA_REMUNERADA = "CUENTA_REMUNERADA", _("Cuenta Remunerada / Depósito")
+        INVERSION = "INVERSION", _("Inversión / Fondos Indexados")
+        HUCHA_EFECTIVO = "HUCHA_EFECTIVO", _("Efectivo / Hucha")
+        OTRO = "OTRO", _("Otro Ahorro")
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cuentas_ahorro",
+        verbose_name=_("titular o responsable"),
+    )
+    nombre = models.CharField(_("nombre de la cuenta"), max_length=100)
+    entidad = models.CharField(_("banco / entidad"), max_length=100, help_text=_("Ej: MyInvestor, Trade Republic, Santander, Openbank, Efectivo."))
+    tipo = models.CharField(
+        _("tipo de cuenta"),
+        max_length=30,
+        choices=Tipo.choices,
+        default=Tipo.FONDO_EMERGENCIA,
+        db_index=True,
+    )
+    color = models.CharField(
+        _("código de color"),
+        max_length=20,
+        default="#3BB8DB",
+        help_text=_("Color distintivo para gráficas y visualización (ej: #3BB8DB)."),
+    )
+    icono = models.CharField(
+        _("icono identificador"),
+        max_length=50,
+        default="piggy-bank",
+        help_text=_("Nombre del icono Lucide (ej: piggy-bank, landmark, trending-up, wallet)."),
+    )
+    numero_cuenta_iban = models.CharField(
+        _("IBAN o identificador (opcional)"),
+        max_length=50,
+        blank=True,
+    )
+    objetivo_monto = models.DecimalField(
+        _("meta de ahorro (€)"),
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text=_("Objetivo o cantidad objetivo a alcanzar (opcional)."),
+    )
+    activo = models.BooleanField(_("cuenta activa"), default=True, db_index=True)
+    notas = models.TextField(_("notas / condiciones"), blank=True)
+    creado_en = models.DateTimeField(_("creado en"), auto_now_add=True)
+    actualizado_en = models.DateTimeField(_("actualizado en"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("cuenta de ahorro")
+        verbose_name_plural = _("cuentas de ahorro")
+        ordering = ["nombre"]
+
+    def __str__(self) -> str:
+        return f"{self.nombre} ({self.entidad}) - {self.get_tipo_display()}"
+
+    def get_saldo_mes(self, anio: int, mes: int) -> Optional[Decimal]:
+        """Devuelve el saldo registrado en un mes y año específicos."""
+        registro = self.saldos.filter(anio=anio, mes=mes).first()
+        return registro.saldo if registro else None
+
+    def get_ultimo_saldo(self) -> Optional["RegistroSaldoMensual"]:
+        """Devuelve el registro de saldo más reciente."""
+        return self.saldos.order_by("-anio", "-mes").first()
+
+
+class RegistroSaldoMensual(models.Model):
+    """Instantánea de saldo consolidado en una cuenta de ahorro en un mes concreto."""
+
+    cuenta = models.ForeignKey(
+        CuentaAhorro,
+        on_delete=models.CASCADE,
+        related_name="saldos",
+        verbose_name=_("cuenta de ahorro"),
+    )
+    anio = models.PositiveIntegerField(_("año / ejercicio"), db_index=True)
+    mes = models.PositiveSmallIntegerField(_("mes (1-12)"), db_index=True)
+    saldo = models.DecimalField(
+        _("saldo a fin de mes (€)"),
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    notas = models.CharField(_("observaciones del mes"), max_length=255, blank=True)
+    creado_en = models.DateTimeField(_("creado en"), auto_now_add=True)
+    actualizado_en = models.DateTimeField(_("actualizado en"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("registro de saldo mensual")
+        verbose_name_plural = _("registros de saldos mensuales")
+        ordering = ["-anio", "-mes", "cuenta__nombre"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["cuenta", "anio", "mes"],
+                name="unique_saldo_cuenta_mes_anio",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["anio", "mes"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.cuenta.nombre} ({self.mes}/{self.anio}): {self.saldo}€"
+

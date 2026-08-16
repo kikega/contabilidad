@@ -79,3 +79,79 @@ class SegurosModelsTests(TestCase):
         )
         self.assertEqual(historial.prima_pagada, Decimal("1050.00"))
         self.assertEqual(seguro.historial.count(), 1)
+
+    def test_sync_elemento_automatico_al_crear_seguro(self) -> None:
+        """Verifica que al dar de alta un seguro se cree/vincule automáticamente el Elemento en la categoría Seguros."""
+        from finanzas.models import Categoria, Elemento
+        seguro = Seguro.objects.create(
+            usuario=self.usuario,
+            ramo=Seguro.Ramo.COCHE,
+            compania="Línea Directa",
+            numero_poliza="LD-AUTO-7788",
+            bien_asegurado="Toyota Yaris",
+            fecha_vencimiento=self.fecha_hoy + timedelta(days=30),
+            prima_actual=Decimal("350.00"),
+        )
+        self.assertIsNotNone(seguro.elemento)
+        self.assertEqual(seguro.elemento.nombre, "Línea Directa - Toyota Yaris")
+        self.assertEqual(seguro.elemento.categoria.nombre, "Seguros")
+        self.assertEqual(seguro.elemento.categoria.tipo, Categoria.Tipo.GASTO)
+        self.assertTrue(seguro.elemento.es_fijo)
+
+    def test_registrar_pago_seguro_view_y_resumen_anual(self) -> None:
+        """Verifica el registro de un pago contable (Gasto) desde el módulo de seguros y el resumen interanual."""
+        from datetime import date
+        from django.test import Client
+        from django.urls import reverse
+        from finanzas.models import Gasto
+
+        seguro = Seguro.objects.create(
+            usuario=self.usuario,
+            ramo=Seguro.Ramo.HOGAR,
+            compania="Mapfre",
+            numero_poliza="MAP-HOG-1122",
+            bien_asegurado="Chalet Sierra",
+            fecha_vencimiento=self.fecha_hoy + timedelta(days=60),
+            prima_actual=Decimal("400.00"),
+            prima_anterior=Decimal("380.00"),
+        )
+
+        client = Client()
+        client.force_login(self.usuario)
+
+        # 1. Registrar pago de 2025
+        Gasto.objects.create(
+            usuario=self.usuario,
+            elemento=seguro.elemento,
+            fecha=date(2025, 4, 15),
+            concepto="Recibo Anual Hogar 2025",
+            monto=Decimal("380.00"),
+            es_fijo=True,
+        )
+
+        # 2. Registrar pago de 2026 mediante el endpoint de pago
+        response = client.post(
+            reverse("seguros:pago_create", args=[seguro.id]),
+            {
+                "fecha": "2026-04-15",
+                "monto": "400.00",
+                "concepto": "Recibo Anual Hogar 2026",
+                "notas": "Renovación con incremento del 5.26%",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        # Verificar que el gasto fue creado
+        gastos = seguro.get_gastos()
+        self.assertEqual(gastos.count(), 2)
+
+        # Verificar el resumen anual y la comparativa interanual calculada
+        resumen = seguro.get_resumen_gastos_anuales()
+        self.assertEqual(len(resumen), 2)
+        # Primer item es 2026 (más reciente)
+        self.assertEqual(resumen[0]["anio"], 2026)
+        self.assertEqual(resumen[0]["total"], Decimal("400.00"))
+        self.assertEqual(resumen[0]["prev_total"], Decimal("380.00"))
+        self.assertEqual(resumen[0]["var_importe"], Decimal("20.00"))
+        self.assertEqual(resumen[0]["var_porcentaje"], Decimal("5.26"))
+

@@ -86,3 +86,30 @@ class HistorialRenovacionSeguroForm(forms.ModelForm):
             "fecha_renovacion": forms.DateInput(attrs={"class": INPUT_CLASSES, "type": "date"}),
             "notas": forms.TextInput(attrs={"class": INPUT_CLASSES, "placeholder": "Observaciones de la renovación"}),
         }
+
+
+class PagoSeguroGastoForm(forms.Form):
+    """Formulario para registrar un pago/recibo de seguro directamente como apunte de Gasto contable."""
+
+    fecha = forms.DateField(
+        label=_("Fecha de cobro / pago"),
+        widget=forms.DateInput(attrs={"class": INPUT_CLASSES, "type": "date"}),
+    )
+    monto = forms.DecimalField(
+        label=_("Importe (€)"),
+        max_digits=10,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={"class": INPUT_CLASSES, "placeholder": "0.00", "step": "0.01", "min": "0.01"}),
+    )
+    concepto = forms.CharField(
+        label=_("Concepto del recibo"),
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(attrs={"class": INPUT_CLASSES, "placeholder": "Ej: Recibo Anual Mapfre / Cuota Semestral"}),
+    )
+    notas = forms.CharField(
+        label=_("Notas adicionales"),
+        required=False,
+        widget=forms.TextInput(attrs={"class": INPUT_CLASSES, "placeholder": "Observaciones (opcional)"}),
+    )
+

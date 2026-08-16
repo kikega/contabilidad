@@ -7,7 +7,15 @@ from django.db.models import DecimalField, F, Q, Sum
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 
-from finanzas.models import Categoria, Elemento, Gasto, GastoEspecialTarjeta, Ingreso
+from finanzas.models import (
+    Categoria,
+    CuentaAhorro,
+    Elemento,
+    Gasto,
+    GastoEspecialTarjeta,
+    Ingreso,
+    RegistroSaldoMensual,
+)
 
 
 class FinanzasService:
@@ -22,6 +30,33 @@ class FinanzasService:
         "Ene", "Feb", "Mar", "Abr", "May", "Jun",
         "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
     ]
+
+    @classmethod
+    def get_anios_disponibles(cls, usuario_id: Optional[int] = None) -> List[int]:
+        """Obtiene la lista ordenada de años para los que existen datos contables registrados."""
+        hoy = timezone.now().date()
+
+        filtro_ing = Q()
+        filtro_gas = Q()
+        filtro_tar = Q()
+        filtro_aho = Q()
+        if usuario_id:
+            filtro_ing = Q(usuario_id=usuario_id)
+            filtro_gas = Q(usuario_id=usuario_id)
+            filtro_tar = Q(usuario_id=usuario_id)
+            filtro_aho = Q(cuenta__usuario_id=usuario_id)
+
+        anios_ingresos = Ingreso.objects.filter(filtro_ing).dates("fecha", "year")
+        anios_gastos = Gasto.objects.filter(filtro_gas).dates("fecha", "year")
+        anios_tarjetas = GastoEspecialTarjeta.objects.filter(filtro_tar).dates("fecha", "year")
+        anios_ahorros = RegistroSaldoMensual.objects.filter(filtro_aho).values_list("anio", flat=True).distinct()
+
+        anios_set = {d.year for d in anios_ingresos} | {d.year for d in anios_gastos} | {d.year for d in anios_tarjetas} | set(anios_ahorros)
+
+        if not anios_set:
+            anios_set.add(hoy.year)
+
+        return sorted(list(anios_set))
 
     @staticmethod
     def get_periodo_fechas(
@@ -397,4 +432,201 @@ class FinanzasService:
             "total_variables": total_variables,
             "balance_neto": balance_neto,
             "ratio_ahorro": ratio_ahorro,
+        }
+
+    @classmethod
+    def get_resumen_ahorros_anual(
+        cls,
+        anio: int,
+        usuario_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Calcula la matriz de saldos mensuales, totales, evoluciones y métricas para las cuentas de ahorro."""
+        hoy = timezone.now().date()
+
+        filtro_cuenta = Q(activo=True)
+        if usuario_id:
+            filtro_cuenta &= Q(usuario_id=usuario_id)
+
+        cuentas_qs = CuentaAhorro.objects.filter(filtro_cuenta).prefetch_related("saldos").order_by("nombre")
+
+        filas_cuentas = []
+        totales_meses: List[Optional[Decimal]] = [None] * 12
+        series_chart_cuentas = []
+
+        total_ahorro_actual = Decimal("0.00")
+        total_meta_ahorro = Decimal("0.00")
+        tiene_metas = False
+
+        distribucion_labels = []
+        distribucion_data = []
+        distribucion_colors = []
+
+        for cuenta in cuentas_qs:
+            saldos_anio = {s.mes: s for s in cuenta.saldos.filter(anio=anio)}
+            # Saldo a cierre de año anterior para calcular variación
+            saldo_anterior_cierre = cuenta.saldos.filter(anio=anio - 1, mes=12).first()
+            if not saldo_anterior_cierre:
+                saldo_anterior_cierre = cuenta.saldos.filter(anio__lt=anio).order_by("-anio", "-mes").first()
+
+            meses_datos = []
+            datos_grafico_cuenta: List[Optional[float]] = []
+            ultimo_saldo_cuenta: Optional[Decimal] = None
+            primer_saldo_cuenta: Optional[Decimal] = saldo_anterior_cierre.saldo if saldo_anterior_cierre else None
+
+            for m in range(1, 13):
+                reg = saldos_anio.get(m)
+                val_saldo = reg.saldo if reg else None
+                notas = reg.notas if reg else ""
+                reg_id = reg.id if reg else None
+
+                meses_datos.append({
+                    "mes": m,
+                    "saldo": val_saldo,
+                    "notas": notas,
+                    "id": reg_id,
+                })
+
+                if val_saldo is not None:
+                    ultimo_saldo_cuenta = val_saldo
+                    if primer_saldo_cuenta is None:
+                        primer_saldo_cuenta = val_saldo
+                    # Sumar al total del mes
+                    if totales_meses[m - 1] is None:
+                        totales_meses[m - 1] = val_saldo
+                    else:
+                        totales_meses[m - 1] += val_saldo
+                    datos_grafico_cuenta.append(float(val_saldo))
+                else:
+                    datos_grafico_cuenta.append(None)
+
+            # Variación anual de esta cuenta
+            variacion_cuenta_imp = Decimal("0.00")
+            variacion_cuenta_pct = Decimal("0.00")
+            if ultimo_saldo_cuenta is not None and primer_saldo_cuenta is not None:
+                variacion_cuenta_imp = (ultimo_saldo_cuenta - primer_saldo_cuenta).quantize(Decimal("0.01"))
+                if primer_saldo_cuenta > Decimal("0.00"):
+                    variacion_cuenta_pct = (((ultimo_saldo_cuenta - primer_saldo_cuenta) / primer_saldo_cuenta) * Decimal("100.00")).quantize(Decimal("0.01"))
+
+            # Último saldo absoluto general de la cuenta
+            ultimo_absoluto = cuenta.get_ultimo_saldo()
+            saldo_act = ultimo_absoluto.saldo if ultimo_absoluto else Decimal("0.00")
+            total_ahorro_actual += saldo_act
+
+            if cuenta.objetivo_monto:
+                total_meta_ahorro += cuenta.objetivo_monto
+                tiene_metas = True
+
+            if saldo_act > Decimal("0.00"):
+                distribucion_labels.append(cuenta.nombre)
+                distribucion_data.append(float(saldo_act))
+                distribucion_colors.append(cuenta.color)
+
+            filas_cuentas.append({
+                "cuenta": cuenta,
+                "meses": meses_datos,
+                "saldo_actual": saldo_act,
+                "ultimo_saldo_anio": ultimo_saldo_cuenta,
+                "variacion_importe": variacion_cuenta_imp,
+                "variacion_porcentaje": variacion_cuenta_pct,
+            })
+
+            series_chart_cuentas.append({
+                "nombre": cuenta.nombre,
+                "color": cuenta.color,
+                "icono": cuenta.icono,
+                "datos": datos_grafico_cuenta,
+            })
+
+        # Cálculo de variaciones mes a mes en los totales
+        totales_meses_data = []
+        evolucion_total_chart: List[Optional[float]] = []
+        prev_total_m = None
+        ultimo_total_registrado = None
+        penultimo_total_registrado = None
+
+        for m_idx, tot_val in enumerate(totales_meses):
+            mes_num = m_idx + 1
+            var_m = Decimal("0.00")
+            if tot_val is not None:
+                if prev_total_m is not None:
+                    var_m = (tot_val - prev_total_m).quantize(Decimal("0.01"))
+                penultimo_total_registrado = ultimo_total_registrado
+                ultimo_total_registrado = tot_val
+                prev_total_m = tot_val
+                evolucion_total_chart.append(float(tot_val))
+            else:
+                evolucion_total_chart.append(None)
+
+            totales_meses_data.append({
+                "mes": mes_num,
+                "total": tot_val,
+                "variacion_mes": var_m,
+            })
+
+        # Variación del último mes registrado
+        var_ultimo_mes_imp = Decimal("0.00")
+        var_ultimo_mes_pct = Decimal("0.00")
+        if ultimo_total_registrado is not None and penultimo_total_registrado is not None:
+            var_ultimo_mes_imp = (ultimo_total_registrado - penultimo_total_registrado).quantize(Decimal("0.01"))
+            if penultimo_total_registrado > Decimal("0.00"):
+                var_ultimo_mes_pct = (((ultimo_total_registrado - penultimo_total_registrado) / penultimo_total_registrado) * Decimal("100.00")).quantize(Decimal("0.01"))
+
+        # Crecimiento acumulado en el año
+        primer_total_anio = next((t for t in totales_meses if t is not None), None)
+        crecimiento_anio_imp = Decimal("0.00")
+        crecimiento_anio_pct = Decimal("0.00")
+        if ultimo_total_registrado is not None and primer_total_anio is not None:
+            crecimiento_anio_imp = (ultimo_total_registrado - primer_total_anio).quantize(Decimal("0.01"))
+            if primer_total_anio > Decimal("0.00"):
+                crecimiento_anio_pct = (((ultimo_total_registrado - primer_total_anio) / primer_total_anio) * Decimal("100.00")).quantize(Decimal("0.01"))
+
+        porcentaje_meta = (
+            ((total_ahorro_actual / total_meta_ahorro) * Decimal("100.00")).quantize(Decimal("0.01"))
+            if tiene_metas and total_meta_ahorro > Decimal("0.00")
+            else None
+        )
+
+        # Datos para comparativa con año anterior
+        totales_anio_anterior: List[Optional[float]] = []
+        for m_idx in range(1, 13):
+            s_ant = RegistroSaldoMensual.objects.filter(
+                cuenta__in=cuentas_qs,
+                anio=anio - 1,
+                mes=m_idx,
+            ).aggregate(total=Sum("saldo"))["total"]
+            totales_anio_anterior.append(float(s_ant) if s_ant is not None else None)
+
+        return {
+            "anio": anio,
+            "meses_abrev": cls.MESES_ABREV,
+            "meses_nombres": cls.MESES_NOMBRES,
+            "meses_lista": list(enumerate(cls.MESES_NOMBRES, 1)),
+            "filas_cuentas": filas_cuentas,
+            "totales_meses": totales_meses_data,
+            "kpis": {
+                "total_ahorro_actual": total_ahorro_actual,
+                "total_meta_ahorro": total_meta_ahorro,
+                "porcentaje_meta": porcentaje_meta,
+                "crecimiento_anio_importe": crecimiento_anio_imp,
+                "crecimiento_anio_porcentaje": crecimiento_anio_pct,
+                "aportacion_ultimo_mes_importe": var_ultimo_mes_imp,
+                "aportacion_ultimo_mes_porcentaje": var_ultimo_mes_pct,
+                "num_cuentas": cuentas_qs.count(),
+            },
+            "graficos": {
+                "meses": cls.MESES_ABREV,
+                "evolucion_total": evolucion_total_chart,
+                "series_cuentas": series_chart_cuentas,
+                "distribucion": {
+                    "labels": distribucion_labels,
+                    "data": distribucion_data,
+                    "colors": distribucion_colors,
+                },
+                "comparativa": {
+                    "anio_actual": anio,
+                    "data_actual": evolucion_total_chart,
+                    "anio_anterior": anio - 1,
+                    "data_anterior": totales_anio_anterior,
+                },
+            },
         }

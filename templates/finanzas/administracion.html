@@ -273,7 +273,14 @@
                       <span class="w-7 h-7 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 inline-flex items-center justify-center">
                         <i data-lucide="{{ elem.icono_efectivo|default:'tag' }}" class="w-3.5 h-3.5"></i>
                       </span>
-                      <span class="font-bold text-slate-900 dark:text-white text-xs">{{ elem.nombre }}</span>
+                      <div>
+                        <span class="font-bold text-slate-900 dark:text-white text-xs">{{ elem.nombre }}</span>
+                        {% if elem.seguro %}
+                        <a href="{% url 'seguros:seguro_detail' elem.seguro.id %}" class="inline-flex items-center ml-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-50 dark:bg-cyan-950/80 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 hover:underline" title="Ver póliza de seguro vinculada">
+                          <i data-lucide="shield" class="w-3 h-3 mr-1"></i> Póliza Nº {{ elem.seguro.numero_poliza }}
+                        </a>
+                        {% endif %}
+                      </div>
                     </div>
                   </td>
                   <td class="px-5 py-3.5 whitespace-nowrap">

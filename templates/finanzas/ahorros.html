@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block title %}Cuentas de Ahorro & Evolución Anual | EcoFamiliar{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-12">
+  
+  <!-- 1. Encabezado Principal y Selector de Ejercicio -->
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+    <div>
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 to-cyan-400 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
+          <i data-lucide="piggy-bank" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+            Control de Cuentas de Ahorro
+          </h1>
+          <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Registro mensual de saldos consolidados y estadísticas de evolución patrimonial.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controles de Acción y Selector de Año -->
+    <div class="flex flex-wrap items-center gap-3">
+      <!-- Selector de Años con HTMX -->
+      <div class="inline-flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+        <span class="text-xs font-semibold text-slate-400 px-2.5 flex items-center">
+          <i data-lucide="calendar" class="w-3.5 h-3.5 mr-1"></i> Año
+        </span>
+        <div class="flex items-center space-x-1">
+          {% for a in anios_disponibles %}
+          <a
+            href="?anio={{ a }}"
+            hx-get="{% url 'finanzas:ahorros_matriz_htmx' %}?anio={{ a }}"
+            hx-target="#matriz-ahorros-container"
+            hx-swap="innerHTML"
+            onclick="cambiarAnioActivo(this, '{{ a }}')"
+            class="btn-anio px-3 py-1.5 rounded-xl text-xs font-bold transition-all {% if a == anio_actual %}bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-sm border border-slate-200 dark:border-slate-700{% else %}text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white{% endif %}"
+          >
+            {{ a }}
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Botón Nueva Cuenta -->
+      <a 
+        href="{% url 'finanzas:cuenta_ahorro_create' %}" 
+        class="inline-flex items-center px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-cyan-600 via-cyan-500 to-cyan-400 hover:from-cyan-500 hover:to-cyan-600 shadow-md shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5"
+      >
+        <i data-lucide="plus-circle" class="w-4 h-4 mr-1.5"></i>
+        <span>Nueva Cuenta de Ahorro</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- 2. Tarjetas KPI de Resumen Estadístico -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    
+    <!-- KPI 1: Patrimonio Total Ahorrado -->
+    <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs relative overflow-hidden">
+      <div class="flex items-center justify-between text-slate-400 mb-2">
+        <span class="text-xs font-bold uppercase tracking-wider">Ahorro Total Actual</span>
+        <div class="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+          <i data-lucide="vault" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight" id="kpi-total-ahorro">
+        {{ resumen.kpis.total_ahorro_actual|floatformat:2 }} €
+      </div>
+      <div class="mt-2 flex items-center justify-between text-[11px] text-slate-400 font-medium">
+        <span>Suma de {{ resumen.kpis.num_cuentas }} cuentas activas</span>
+        {% if resumen.kpis.porcentaje_meta %}
+        <span class="text-cyan-600 dark:text-cyan-400 font-bold">{{ resumen.kpis.porcentaje_meta }}% meta</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- KPI 2: Crecimiento Anual -->
+    <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs relative overflow-hidden">
+      <div class="flex items-center justify-between text-slate-400 mb-2">
+        <span class="text-xs font-bold uppercase tracking-wider">Crecimiento en {{ anio_actual }}</span>
+        <div class="w-8 h-8 rounded-xl {% if resumen.kpis.crecimiento_anio_importe >= 0 %}bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400{% else %}bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400{% endif %} flex items-center justify-center">
+          <i data-lucide="trending-up" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="text-2xl sm:text-3xl font-black {% if resumen.kpis.crecimiento_anio_importe >= 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %} tracking-tight">
+        {% if resumen.kpis.crecimiento_anio_importe > 0 %}+{% endif %}{{ resumen.kpis.crecimiento_anio_importe|floatformat:2 }} €
+      </div>
+      <div class="mt-2 text-[11px] text-slate-400 font-medium flex items-center">
+        <span>Variación acumulada: </span>
+        <span class="ml-1 font-bold {% if resumen.kpis.crecimiento_anio_importe >= 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
+          {% if resumen.kpis.crecimiento_anio_importe > 0 %}+{% endif %}{{ resumen.kpis.crecimiento_anio_porcentaje }}%
+        </span>
+      </div>
+    </div>
+
+    <!-- KPI 3: Aportación / Variación Último Mes -->
+    <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs relative overflow-hidden">
+      <div class="flex items-center justify-between text-slate-400 mb-2">
+        <span class="text-xs font-bold uppercase tracking-wider">Variación Último Mes</span>
+        <div class="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+          <i data-lucide="arrow-left-right" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="text-2xl sm:text-3xl font-black {% if resumen.kpis.aportacion_ultimo_mes_importe >= 0 %}text-slate-900 dark:text-white{% else %}text-rose-600 dark:text-rose-400{% endif %} tracking-tight">
+        {% if resumen.kpis.aportacion_ultimo_mes_importe > 0 %}+{% endif %}{{ resumen.kpis.aportacion_ultimo_mes_importe|floatformat:2 }} €
+      </div>
+      <div class="mt-2 text-[11px] text-slate-400 font-medium">
+        <span>Incremento vs. mes anterior ({% if resumen.kpis.aportacion_ultimo_mes_importe > 0 %}+{% endif %}{{ resumen.kpis.aportacion_ultimo_mes_porcentaje }}%)</span>
+      </div>
+    </div>
+
+    <!-- KPI 4: Cuentas y Metas -->
+    <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs relative overflow-hidden">
+      <div class="flex items-center justify-between text-slate-400 mb-2">
+        <span class="text-xs font-bold uppercase tracking-wider">Objetivo de Ahorro</span>
+        <div class="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+          <i data-lucide="target" class="w-4 h-4"></i>
+        </div>
+      </div>
+      <div class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+        {% if resumen.kpis.total_meta_ahorro > 0 %}
+          {{ resumen.kpis.total_meta_ahorro|floatformat:0 }} €
+        {% else %}
+          Sin meta
+        {% endif %}
+      </div>
+      <div class="mt-2 text-[11px] text-slate-400 font-medium">
+        <span>{{ resumen.kpis.num_cuentas }} cuentas registradas</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 3. Matriz Anual Interactiva (Excel Inteligente) -->
+  <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+    <div class="p-5 sm:p-6 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30">
+      <div>
+        <div class="flex items-center space-x-2">
+          <div class="w-3 h-3 rounded-full bg-cyan-500"></div>
+          <h2 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+            Matriz de Saldos Mensuales (<span id="texto-anio-matriz">{{ anio_actual }}</span>)
+          </h2>
+        </div>
+        <p class="text-xs text-slate-400 mt-0.5">
+          Escribe el saldo de fin de mes en cualquier casilla. Se guarda y recalcula automáticamente al cambiar de celda.
+        </p>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <span id="loading-indicator" class="htmx-indicator inline-flex items-center text-xs text-cyan-600 dark:text-cyan-400 font-semibold">
+          <i data-lucide="loader-2" class="w-3.5 h-3.5 mr-1 animate-spin"></i> Guardando...
+        </span>
+      </div>
+    </div>
+
+    <!-- Contenedor dinámico de la tabla con HTMX -->
+    <div id="matriz-ahorros-container">
+      {% include "finanzas/partials/matriz_ahorros.html" %}
+    </div>
+  </div>
+
+  <!-- 4. Sección de Estadísticas y Gráficos Visuales -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    
+    <!-- Gráfico 1: Evolución del Ahorro Total a lo largo del Año (2 Columnas) -->
+    <div class="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center">
+            <i data-lucide="trending-up" class="w-4 h-4 mr-2 text-cyan-500"></i>
+            Evolución del Ahorro Total Acumulado (<span class="chart-anio-label">{{ anio_actual }}</span>)
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">Curva de crecimiento mensual del patrimonio líquido y ahorros.</p>
+        </div>
+      </div>
+      <div class="h-72 w-full relative">
+        <canvas id="chartEvolucionTotal"></canvas>
+      </div>
+    </div>
+
+    <!-- Gráfico 2: Distribución del Ahorro por Cuentas / Fondos (1 Columna) -->
+    <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center">
+            <i data-lucide="pie-chart" class="w-4 h-4 mr-2 text-cyan-500"></i>
+            Distribución por Cuentas
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">Peso porcentual de cada fondo o banco.</p>
+        </div>
+      </div>
+      <div class="h-72 w-full relative flex items-center justify-center">
+        <canvas id="chartDistribucion"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Scripts de Inicialización de Chart.js y Actualización en Tiempo Real -->
+<script>
+  let chartEvolucion = null;
+  let chartDistribucion = null;
+
+  const graficosDataInicial = {{ graficos_json|safe }};
+
+  function inicializarGraficos(datos) {
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+    const gridColor = isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.8)';
+
+    // 1. Gráfico de Evolución Total (Línea con Gradiente)
+    const ctxEvolucion = document.getElementById('chartEvolucionTotal');
+    if (ctxEvolucion) {
+      if (chartEvolucion) chartEvolucion.destroy();
+
+      const ctx = ctxEvolucion.getContext('2d');
+      const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+      gradient.addColorStop(0, 'rgba(59, 184, 219, 0.35)');
+      gradient.addColorStop(1, 'rgba(59, 184, 219, 0.00)');
+
+      chartEvolucion = new Chart(ctxEvolucion, {
+        type: 'line',
+        data: {
+          labels: datos.meses,
+          datasets: [{
+            label: 'Ahorro Total (€)',
+            data: datos.evolucion_total,
+            borderColor: '#3BB8DB',
+            borderWidth: 3,
+            backgroundColor: gradient,
+            fill: true,
+            tension: 0.35,
+            pointBackgroundColor: '#3BB8DB',
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            spanGaps: true,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.parsed.y !== null ? `${context.parsed.y.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €` : 'Sin datos';
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: textColor, font: { size: 11, weight: 'bold' } }
+            },
+            y: {
+              grid: { color: gridColor },
+              ticks: {
+                color: textColor,
+                font: { size: 11 },
+                callback: value => `${value.toLocaleString('es-ES')} €`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // 2. Gráfico de Distribución por Cuentas (Donut)
+    const ctxDist = document.getElementById('chartDistribucion');
+    if (ctxDist) {
+      if (chartDistribucion) chartDistribucion.destroy();
+
+      chartDistribucion = new Chart(ctxDist, {
+        type: 'doughnut',
+        data: {
+          labels: datos.distribucion.labels,
+          datasets: [{
+            data: datos.distribucion.data,
+            backgroundColor: datos.distribucion.colors.length > 0 ? datos.distribucion.colors : ['#3BB8DB', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'],
+            borderWidth: 2,
+            borderColor: isDark ? '#0f172a' : '#ffffff',
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: textColor,
+                boxWidth: 12,
+                padding: 15,
+                font: { size: 11, weight: '600' }
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const val = context.parsed || 0;
+                  return ` ${context.label}: ${val.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`;
+                }
+              }
+            }
+          },
+          cutout: '70%',
+        }
+      });
+    }
+  }
+
+  // Inicializar al cargar la página
+  document.addEventListener('DOMContentLoaded', () => {
+    inicializarGraficos(graficosDataInicial);
+  });
+
+  // Escuchar evento disparado por HTMX cuando se actualiza un saldo
+  document.body.addEventListener('actualizarGraficos', function(evt) {
+    if (evt.detail) {
+      inicializarGraficos(evt.detail);
+      lucide.createIcons();
+    }
+  });
+
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    lucide.createIcons();
+  });
+
+  function cambiarAnioActivo(btn, anio) {
+    document.querySelectorAll('.btn-anio').forEach(b => {
+      b.className = 'btn-anio px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+    });
+    btn.className = 'btn-anio px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-sm border border-slate-200 dark:border-slate-700';
+    
+    document.querySelectorAll('.chart-anio-label').forEach(el => el.textContent = anio);
+    const textoMatriz = document.getElementById('texto-anio-matriz');
+    if (textoMatriz) textoMatriz.textContent = anio;
+  }
+</script>
+{% endblock %}

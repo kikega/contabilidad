@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Eliminar {{ object.nombre }} | EcoFamiliar{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto py-12">
+  <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-6 sm:p-8 text-center">
+    <div class="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4">
+      <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+    </div>
+    
+    <h1 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
+      ¿Eliminar la cuenta "{{ object.nombre }}"?
+    </h1>
+    
+    <p class="text-xs text-slate-500 dark:text-slate-400 mb-6">
+      Esta acción eliminará la cuenta y todos los registros históricos de saldo mensual asociados a ella. Esta acción no se puede deshacer.
+    </p>
+
+    <form method="POST">
+      {% csrf_token %}
+      <div class="flex items-center justify-center space-x-3">
+        <a href="{% url 'finanzas:ahorros' %}" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          Cancelar
+        </a>
+        <button type="submit" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm shadow-rose-600/30 transition-all">
+          Sí, Eliminar Cuenta
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
