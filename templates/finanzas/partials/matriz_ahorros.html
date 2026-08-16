@@ -9,11 +9,11 @@
           Cuenta / Fondo de Ahorro
         </th>
         {% for abrev in resumen.meses_abrev %}
-        <th class="px-3 py-3.5 text-right min-w-[105px]">
+        <th class="px-3 py-3.5 text-right min-w-[110px]">
           {{ abrev }}
         </th>
         {% endfor %}
-        <th class="px-4 py-3.5 text-right min-w-[120px] bg-slate-100/50 dark:bg-slate-800/80 font-bold text-slate-700 dark:text-slate-200">
+        <th class="px-4 py-3.5 text-right min-w-[125px] bg-slate-100/50 dark:bg-slate-800/80 font-bold text-slate-700 dark:text-slate-200">
           Saldo Actual
         </th>
         <th class="px-4 py-3.5 text-right min-w-[130px] font-bold text-slate-700 dark:text-slate-200">
@@ -47,35 +47,29 @@
           </div>
         </td>
 
-        <!-- Celdas de los 12 meses -->
+        <!-- Celdas de los 12 meses: Limpias y Clickables -->
         {% for m in fila.meses %}
         <td class="px-2 py-2 text-right whitespace-nowrap">
-          <form 
-            hx-post="{% url 'finanzas:guardar_saldo_mes_htmx' %}"
-            hx-target="#matriz-ahorros-container"
-            hx-swap="innerHTML"
-            hx-indicator="#loading-indicator"
-            class="m-0"
+          {% if m.saldo is not None %}
+          <button 
+            type="button"
+            onclick="abrirModalSaldo('{{ fila.cuenta.id }}', '{{ resumen.anio }}', '{{ m.mes }}', '{{ m.saldo }}', '{{ m.notas|escapejs }}')"
+            class="group/btn w-full text-right px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-cyan-50 dark:hover:bg-cyan-950/60 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-200 dark:hover:border-cyan-800 border border-transparent transition-all inline-flex items-center justify-end space-x-1 cursor-pointer"
+            title="{{ fila.cuenta.nombre }} ({{ m.mes }}/{{ resumen.anio }}): {{ m.saldo|floatformat:2 }} €{% if m.notas %} - {{ m.notas }}{% endif %}"
           >
-            {% csrf_token %}
-            <input type="hidden" name="cuenta_id" value="{{ fila.cuenta.id }}">
-            <input type="hidden" name="anio" value="{{ resumen.anio }}">
-            <input type="hidden" name="mes" value="{{ m.mes }}">
-            
-            <div class="relative group/cell">
-              <input 
-                type="number" 
-                step="0.01"
-                min="0.00"
-                name="saldo" 
-                value="{% if m.saldo is not None %}{{ m.saldo }}{% endif %}"
-                placeholder="—"
-                title="Editar saldo de {{ m.mes }}/{{ resumen.anio }}"
-                class="w-full text-right px-2 py-1.5 rounded-lg text-xs font-semibold bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800/80 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none transition-all {% if m.saldo is not None %}text-slate-900 dark:text-white{% else %}text-slate-300 dark:text-slate-600{% endif %}"
-                onchange="this.form.requestSubmit()"
-              >
-            </div>
-          </form>
+            <span>{{ m.saldo|floatformat:2 }} €</span>
+            <i data-lucide="pencil" class="w-2.5 h-2.5 opacity-0 group-hover/btn:opacity-100 text-cyan-500 transition-opacity shrink-0"></i>
+          </button>
+          {% else %}
+          <button 
+            type="button"
+            onclick="abrirModalSaldo('{{ fila.cuenta.id }}', '{{ resumen.anio }}', '{{ m.mes }}', '', '')"
+            class="w-full text-right px-2.5 py-1.5 rounded-xl text-xs text-slate-300 dark:text-slate-600 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
+            title="Añadir saldo de {{ m.mes }}/{{ resumen.anio }} para {{ fila.cuenta.nombre }}"
+          >
+            —
+          </button>
+          {% endif %}
         </td>
         {% endfor %}
 
@@ -110,7 +104,7 @@
 
         <!-- Acciones: Editar / Eliminar cuenta -->
         <td class="px-3 py-3 text-center whitespace-nowrap space-x-1">
-          <a href="{% url 'finanzas:cuenta_ahorro_update' fila.cuenta.id %}" title="Editar cuenta" class="p-1 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
+          <a href="{% url 'finanzas:cuenta_ahorro_update' fila.cuenta.id %}" title="Editar configuración de cuenta" class="p-1 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
             <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
           </a>
           <a href="{% url 'finanzas:cuenta_ahorro_delete' fila.cuenta.id %}" title="Eliminar cuenta" class="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">

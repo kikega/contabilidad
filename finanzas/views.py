@@ -677,6 +677,7 @@ class AhorrosListView(LoginRequiredMixin, TemplateView):
         context["anio_actual"] = anio
         context["anios_disponibles"] = anios_disponibles
         context["resumen"] = resumen_ahorros
+        context["cuentas_activas"] = CuentaAhorro.objects.filter(activo=True).order_by("nombre")
         context["form_cuenta"] = CuentaAhorroForm()
         context["graficos_json"] = json.dumps(resumen_ahorros["graficos"])
         return context

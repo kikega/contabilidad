@@ -46,13 +46,23 @@
         </div>
       </div>
 
+      <!-- Botón Registrar / Actualizar Saldo -->
+      <button 
+        type="button"
+        onclick="abrirModalSaldo('', '{{ anio_actual }}', '', '', '')"
+        class="inline-flex items-center px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/80 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 border border-cyan-200 dark:border-cyan-800 transition-all cursor-pointer"
+      >
+        <i data-lucide="edit-3" class="w-4 h-4 mr-1.5 text-cyan-600 dark:text-cyan-400"></i>
+        <span>Actualizar Saldo</span>
+      </button>
+
       <!-- Botón Nueva Cuenta -->
       <a 
         href="{% url 'finanzas:cuenta_ahorro_create' %}" 
         class="inline-flex items-center px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-cyan-600 via-cyan-500 to-cyan-400 hover:from-cyan-500 hover:to-cyan-600 shadow-md shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5"
       >
         <i data-lucide="plus-circle" class="w-4 h-4 mr-1.5"></i>
-        <span>Nueva Cuenta de Ahorro</span>
+        <span>Nueva Cuenta</span>
       </a>
     </div>
   </div>
@@ -136,7 +146,7 @@
 
   </div>
 
-  <!-- 3. Matriz Anual Interactiva (Excel Inteligente) -->
+  <!-- 3. Matriz Anual Interactiva -->
   <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
     <div class="p-5 sm:p-6 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30">
       <div>
@@ -147,13 +157,13 @@
           </h2>
         </div>
         <p class="text-xs text-slate-400 mt-0.5">
-          Escribe el saldo de fin de mes en cualquier casilla. Se guarda y recalcula automáticamente al cambiar de celda.
+          Haz clic en cualquier casilla de mes para registrar o modificar el saldo a fin de mes.
         </p>
       </div>
 
       <div class="flex items-center space-x-2">
         <span id="loading-indicator" class="htmx-indicator inline-flex items-center text-xs text-cyan-600 dark:text-cyan-400 font-semibold">
-          <i data-lucide="loader-2" class="w-3.5 h-3.5 mr-1 animate-spin"></i> Guardando...
+          <i data-lucide="loader-2" class="w-3.5 h-3.5 mr-1 animate-spin"></i> Actualizando...
         </span>
       </div>
     </div>
@@ -203,7 +213,165 @@
 
 </div>
 
-<!-- Scripts de Inicialización de Chart.js y Actualización en Tiempo Real -->
+<!-- MODAL POPUP PARA REGISTRAR / EDITAR SALDO MENSUAL -->
+<div 
+  id="modal-saldo" 
+  class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+  tabindex="-1"
+  aria-modal="true"
+  role="dialog"
+>
+  <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/80 dark:border-slate-800 max-w-md w-full p-6 relative animate-fade-in" onclick="event.stopPropagation()">
+    
+    <!-- Encabezado del Modal -->
+    <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-200/80 dark:border-slate-800">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-9 h-9 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+          <i data-lucide="banknote" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white" id="modal-saldo-titulo">
+            Registrar Saldo Mensual
+          </h3>
+          <p class="text-[11px] text-slate-400">Introduce la cantidad disponible a fin de mes</p>
+        </div>
+      </div>
+      <button 
+        type="button" 
+        onclick="cerrarModalSaldo()" 
+        class="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+      >
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Formulario HTMX dentro del Modal -->
+    <form 
+      id="form-modal-saldo"
+      hx-post="{% url 'finanzas:guardar_saldo_mes_htmx' %}"
+      hx-target="#matriz-ahorros-container"
+      hx-swap="innerHTML"
+      hx-indicator="#loading-indicator"
+      class="space-y-4"
+    >
+      {% csrf_token %}
+
+      <!-- Selección de Cuenta -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+          Cuenta / Fondo de Ahorro
+        </label>
+        <select 
+          id="modal-cuenta-id" 
+          name="cuenta_id" 
+          required
+          class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all"
+        >
+          {% for c in cuentas_activas %}
+          <option value="{{ c.id }}">{{ c.nombre }} ({{ c.entidad }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Selección de Año y Mes -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+            Año
+          </label>
+          <select 
+            id="modal-anio" 
+            name="anio" 
+            required
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all"
+          >
+            {% for a in anios_disponibles %}
+            <option value="{{ a }}" {% if a == anio_actual %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+            Mes
+          </label>
+          <select 
+            id="modal-mes" 
+            name="mes" 
+            required
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all"
+          >
+            {% for m_num, m_nom in resumen.meses_lista %}
+            <option value="{{ m_num }}">{{ m_nom }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Saldo a Fin de Mes -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+          Saldo Consolidado a Fin de Mes (€) *
+        </label>
+        <div class="relative">
+          <input 
+            type="text" 
+            inputmode="decimal"
+            id="modal-saldo-input" 
+            name="saldo" 
+            placeholder="0.00" 
+            required
+            class="w-full px-3.5 py-2.5 pr-8 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all placeholder:text-slate-400"
+          >
+          <span class="absolute right-3 top-2.5 text-xs font-bold text-slate-400">€</span>
+        </div>
+      </div>
+
+      <!-- Notas del Mes -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+          Observaciones del mes (opcional)
+        </label>
+        <input 
+          type="text" 
+          id="modal-notas-input" 
+          name="notas" 
+          placeholder="Ej: Aportación extra paga o intereses" 
+          class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all placeholder:text-slate-400"
+        >
+      </div>
+
+      <!-- Botones de Acción del Modal -->
+      <div class="pt-4 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+        <button 
+          type="button" 
+          id="btn-borrar-saldo"
+          onclick="borrarSaldoActual()"
+          class="text-xs text-rose-600 dark:text-rose-400 hover:underline font-semibold hidden"
+        >
+          Eliminar Registro
+        </button>
+        <div class="flex items-center space-x-2 ml-auto">
+          <button 
+            type="button" 
+            onclick="cerrarModalSaldo()" 
+            class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="submit" 
+            class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-700 shadow-sm shadow-cyan-600/30 transition-all cursor-pointer"
+          >
+            Guardar Saldo
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Scripts de Inicialización de Chart.js y Gestión del Modal -->
 <script>
   let chartEvolucion = null;
   let chartDistribucion = null;
@@ -337,6 +505,13 @@
     lucide.createIcons();
   });
 
+  // Al enviar con éxito el formulario del modal, cerrarlo
+  document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail && evt.detail.elt && evt.detail.elt.id === 'form-modal-saldo') {
+      cerrarModalSaldo();
+    }
+  });
+
   function cambiarAnioActivo(btn, anio) {
     document.querySelectorAll('.btn-anio').forEach(b => {
       b.className = 'btn-anio px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
@@ -346,6 +521,65 @@
     document.querySelectorAll('.chart-anio-label').forEach(el => el.textContent = anio);
     const textoMatriz = document.getElementById('texto-anio-matriz');
     if (textoMatriz) textoMatriz.textContent = anio;
+  }
+
+  // FUNCIONES DE CONTROL DEL MODAL POPUP
+  function abrirModalSaldo(cuentaId, anio, mes, saldo, notas) {
+    const modal = document.getElementById('modal-saldo');
+    if (!modal) return;
+
+    if (cuentaId) {
+      document.getElementById('modal-cuenta-id').value = cuentaId;
+    }
+    if (anio) {
+      document.getElementById('modal-anio').value = anio;
+    }
+    if (mes) {
+      document.getElementById('modal-mes').value = mes;
+    }
+    
+    const inputSaldo = document.getElementById('modal-saldo-input');
+    inputSaldo.value = saldo || '';
+    
+    document.getElementById('modal-notas-input').value = notas || '';
+
+    const btnBorrar = document.getElementById('btn-borrar-saldo');
+    if (saldo && saldo.length > 0) {
+      btnBorrar?.classList.remove('hidden');
+    } else {
+      btnBorrar?.classList.add('hidden');
+    }
+
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+      inputSaldo.focus();
+      inputSaldo.select();
+    }, 50);
+  }
+
+  function cerrarModalSaldo() {
+    const modal = document.getElementById('modal-saldo');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function borrarSaldoActual() {
+    if (confirm('¿Deseas eliminar el registro de saldo de este mes?')) {
+      const inputSaldo = document.getElementById('modal-saldo-input');
+      inputSaldo.value = '';
+      document.getElementById('form-modal-saldo').requestSubmit();
+    }
+  }
+
+  // Cerrar al pulsar Escape o al hacer clic fuera
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') cerrarModalSaldo();
+  });
+
+  const modalSaldoEl = document.getElementById('modal-saldo');
+  if (modalSaldoEl) {
+    modalSaldoEl.addEventListener('click', (e) => {
+      if (e.target === modalSaldoEl) cerrarModalSaldo();
+    });
   }
 </script>
 {% endblock %}
