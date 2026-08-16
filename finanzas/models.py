@@ -104,14 +104,6 @@ class Elemento(models.Model):
 class Ingreso(models.Model):
     """Registro de entradas económicas y fuentes salariales de la unidad familiar."""
 
-    class Fuente(models.TextChoices):
-        NOMINA_TITULAR_1 = "NOMINA_TITULAR_1", _("Nómina Titular 1")
-        NOMINA_TITULAR_2 = "NOMINA_TITULAR_2", _("Nómina Titular 2")
-        RESCATE_PLAN_PENSIONES = "RESCATE_PLAN_PENSIONES", _("Rescate Plan Pensiones")
-        PENSIONES = "PENSIONES", _("Pensiones")
-        RENDIMIENTOS_CAPITAL = "RENDIMIENTOS_CAPITAL", _("Rendimientos de Capital / Inversión")
-        OTROS = "OTROS", _("Otros Ingresos")
-
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -123,18 +115,9 @@ class Ingreso(models.Model):
     elemento = models.ForeignKey(
         Elemento,
         on_delete=models.PROTECT,
-        null=True,
-        blank=True,
         related_name="ingresos",
-        verbose_name=_("elemento / concepto"),
+        verbose_name=_("elemento / concepto de ingreso"),
         limit_choices_to={"categoria__tipo": Categoria.Tipo.INGRESO},
-    )
-    fuente = models.CharField(
-        _("fuente de ingreso"),
-        max_length=30,
-        choices=Fuente.choices,
-        default=Fuente.NOMINA_TITULAR_1,
-        db_index=True,
     )
     monto = models.DecimalField(
         _("importe (€)"),
@@ -157,8 +140,8 @@ class Ingreso(models.Model):
         verbose_name_plural = _("ingresos")
         ordering = ["-fecha", "-creado_en"]
         indexes = [
-            models.Index(fields=["fecha", "fuente"]),
             models.Index(fields=["fecha", "monto"]),
+            models.Index(fields=["elemento", "fecha"]),
         ]
 
     @property
@@ -168,7 +151,9 @@ class Ingreso(models.Model):
 
     def __str__(self) -> str:
         elem_name = self.elemento.nombre if self.elemento else "Ingreso"
-        return f"{elem_name} ({self.get_fuente_display()}) - {self.monto}€ ({self.fecha})"
+        if self.descripcion:
+            return f"{elem_name}: {self.descripcion} - {self.monto}€ ({self.fecha})"
+        return f"{elem_name} - {self.monto}€ ({self.fecha})"
 
 
 class Gasto(models.Model):

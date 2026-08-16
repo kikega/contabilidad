@@ -219,7 +219,6 @@ class Command(BaseCommand):
                 Ingreso.objects.get_or_create(
                     usuario=titular1,
                     elemento=elementos_ingreso["Nómina Carlos"],
-                    fuente=Ingreso.Fuente.NOMINA_TITULAR_1,
                     fecha=fecha_base,
                     defaults={
                         "monto": Decimal("2450.00"),
@@ -231,7 +230,6 @@ class Command(BaseCommand):
                 Ingreso.objects.get_or_create(
                     usuario=titular2,
                     elemento=elementos_ingreso["Nómina Elena"],
-                    fuente=Ingreso.Fuente.NOMINA_TITULAR_2,
                     fecha=fecha_base,
                     defaults={
                         "monto": Decimal("1920.00"),
@@ -244,7 +242,6 @@ class Command(BaseCommand):
                     Ingreso.objects.get_or_create(
                         usuario=titular1,
                         elemento=elementos_ingreso["Pagas Extraordinarias"],
-                        fuente=Ingreso.Fuente.NOMINA_TITULAR_1,
                         fecha=date(anio, mes, 20),
                         defaults={
                             "monto": Decimal("2450.00"),
@@ -257,7 +254,6 @@ class Command(BaseCommand):
                     Ingreso.objects.get_or_create(
                         usuario=titular1,
                         elemento=elementos_ingreso["Rendimientos de Inversión"],
-                        fuente=Ingreso.Fuente.RENDIMIENTOS_CAPITAL,
                         fecha=date(anio, mes, 28),
                         defaults={
                             "monto": Decimal("180.50"),

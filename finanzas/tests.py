@@ -64,28 +64,41 @@ class FinanzasIntegrationTests(TestCase):
         self.assertContains(response, "Ingreso")
 
     def test_cuentas_view_and_htmx_endpoint(self) -> None:
-        """Verifica la carga de la vista Cuentas y su desglose mensual HTMX."""
+        """Verifica la carga de la vista Cuentas con matriz anual de 12 meses y su modal de detalle HTMX."""
         call_command("seed_data")
         carlos = Usuario.objects.get(email="carlos@familia.com")
 
         client = Client()
         client.force_login(carlos)
 
-        # Cuentas page
-        response = client.get(reverse("finanzas:cuentas"), {"anio": "2026", "mes": "1"})
+        # Cuentas page con matriz anual
+        response = client.get(reverse("finanzas:cuentas"), {"anio": "2026"})
         self.assertEqual(response.status_code, 200)
-        self.assertIn("resumen", response.context)
-        self.assertContains(response, "Libro Contable")
+        self.assertIn("resumen_anual", response.context)
+        self.assertContains(response, "Libro Contable & Cuentas Anuales")
+        self.assertContains(response, "Total Ingresos")
+        self.assertContains(response, "Total Gastos")
 
-        # Cuentas HTMX partial
+        # Cuentas HTMX annual partial
         response_htmx = client.get(
             reverse("finanzas:cuentas_mes_htmx"),
-            {"anio": "2026", "mes": "2"},
+            {"anio": "2026"},
             HTTP_HX_REQUEST="true",
         )
         self.assertEqual(response_htmx.status_code, 200)
-        self.assertContains(response_htmx, "Desglose de Ingresos")
-        self.assertContains(response_htmx, "Desglose de Gastos")
+        self.assertContains(response_htmx, "Resumen General del Ejercicio 2026")
+        self.assertContains(response_htmx, "Categorías de Ingresos")
+        self.assertContains(response_htmx, "Categorías de Gastos")
+
+        # Elemento Mes Detalle HTMX Modal
+        elem = Elemento.objects.first()
+        response_modal = client.get(
+            reverse("finanzas:elemento_mes_detalle_htmx"),
+            {"elemento_id": elem.id, "anio": "2026", "mes": "1", "tipo": "gasto"},
+            HTTP_HX_REQUEST="true",
+        )
+        self.assertEqual(response_modal.status_code, 200)
+        self.assertContains(response_modal, elem.nombre)
 
     def test_administracion_view_and_categoria_crud(self) -> None:
         """Verifica el panel de administración y el ciclo de vida de una categoría."""

@@ -79,9 +79,8 @@ class IngresoForm(forms.ModelForm):
 
     class Meta:
         model = Ingreso
-        fields = ["fuente", "elemento", "monto", "fecha", "descripcion", "notas"]
+        fields = ["elemento", "monto", "fecha", "descripcion", "notas"]
         widgets = {
-            "fuente": forms.Select(attrs={"class": SELECT_CLASSES}),
             "elemento": forms.Select(attrs={"class": SELECT_CLASSES}),
             "monto": forms.NumberInput(
                 attrs={
@@ -100,7 +99,7 @@ class IngresoForm(forms.ModelForm):
             "descripcion": forms.TextInput(
                 attrs={
                     "class": INPUT_CLASSES,
-                    "placeholder": "Ej: Nómina mensual Titular 1",
+                    "placeholder": "Concepto o detalle opcional (ej: Nómina mensual, Dividendo Q1...)",
                 }
             ),
             "notas": forms.Textarea(

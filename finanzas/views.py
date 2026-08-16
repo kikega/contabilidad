@@ -89,7 +89,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
 
 class CuentasView(LoginRequiredMixin, TemplateView):
-    """Vista general para consultar y editar apuntes de ingresos y gastos organizados por mes y año."""
+    """Vista general para consultar y auditar el libro contable con matriz anual de 12 meses por categoría."""
 
     template_name = "finanzas/cuentas.html"
 
@@ -99,7 +99,6 @@ class CuentasView(LoginRequiredMixin, TemplateView):
         anios_disponibles = FinanzasService.get_anios_disponibles()
 
         anio_param = self.request.GET.get("anio")
-        mes_param = self.request.GET.get("mes")
 
         if anio_param and anio_param.isdigit():
             anio = int(anio_param)
@@ -112,28 +111,18 @@ class CuentasView(LoginRequiredMixin, TemplateView):
             anios_disponibles.append(anio)
             anios_disponibles.sort()
 
-        mes = int(mes_param) if mes_param and mes_param.isdigit() else hoy.month
-
-        resumen = FinanzasService.get_resumen_cuentas_mensual(anio, mes)
-
-        meses_lista = [
-            (1, "Enero"), (2, "Febrero"), (3, "Marzo"), (4, "Abril"),
-            (5, "Mayo"), (6, "Junio"), (7, "Julio"), (8, "Agosto"),
-            (9, "Septiembre"), (10, "Octubre"), (11, "Noviembre"), (12, "Diciembre")
-        ]
+        resumen_anual = FinanzasService.get_resumen_cuentas_anual(anio=anio)
 
         context.update({
-            "resumen": resumen,
+            "resumen_anual": resumen_anual,
             "anio_actual": anio,
-            "mes_actual": mes,
             "anios_disponibles": anios_disponibles,
-            "meses_lista": meses_lista,
         })
         return context
 
 
 class CuentasMesHtmxView(LoginRequiredMixin, View):
-    """Fragmento HTMX que devuelve el desglose de ingresos y gastos de un mes específico."""
+    """Fragmento HTMX que devuelve la matriz anual completa de categorías y apuntes para un año específico."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
         hoy = timezone.now().date()
@@ -151,23 +140,65 @@ class CuentasMesHtmxView(LoginRequiredMixin, View):
             anios_disponibles.append(anio)
             anios_disponibles.sort()
 
-        mes = int(request.GET.get("mes", hoy.month))
-
-        resumen = FinanzasService.get_resumen_cuentas_mensual(anio, mes)
+        resumen_anual = FinanzasService.get_resumen_cuentas_anual(anio=anio)
 
         return render(
             request,
-            "finanzas/partials/cuentas_mes.html",
+            "finanzas/partials/cuentas_anual.html",
             {
-                "resumen": resumen,
+                "resumen_anual": resumen_anual,
                 "anio_actual": anio,
-                "mes_actual": mes,
                 "anios_disponibles": anios_disponibles,
-                "meses_lista": [
-                    (1, "Enero"), (2, "Febrero"), (3, "Marzo"), (4, "Abril"),
-                    (5, "Mayo"), (6, "Junio"), (7, "Julio"), (8, "Agosto"),
-                    (9, "Septiembre"), (10, "Octubre"), (11, "Noviembre"), (12, "Diciembre")
-                ],
+            },
+        )
+
+
+class ElementoMesDetalleHtmxView(LoginRequiredMixin, View):
+    """Devuelve el modal interactivo con los apuntes detallados de un elemento en un mes y año concretos."""
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        elemento_id = request.GET.get("elemento_id")
+        anio = int(request.GET.get("anio", timezone.now().year))
+        mes = int(request.GET.get("mes", timezone.now().month))
+        tipo = request.GET.get("tipo", "gasto").lower()
+
+        elemento = get_object_or_404(Elemento.objects.select_related("categoria"), id=elemento_id)
+        
+        meses_nombres = [
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        ]
+        nombre_mes = meses_nombres[mes - 1]
+
+        if tipo == "ingreso":
+            items = Ingreso.objects.filter(
+                elemento=elemento,
+                fecha__year=anio,
+                fecha__month=mes,
+            ).select_related("usuario").order_by("fecha")
+            total_mes = sum((item.monto for item in items), Decimal("0.00"))
+        else:
+            items = Gasto.objects.filter(
+                elemento=elemento,
+                fecha__year=anio,
+                fecha__month=mes,
+            ).select_related("usuario").order_by("fecha")
+            total_mes = sum((item.monto for item in items), Decimal("0.00"))
+
+        fecha_sugerida = f"{anio:04d}-{mes:02d}-01"
+
+        return render(
+            request,
+            "finanzas/partials/elemento_mes_detalle_modal.html",
+            {
+                "elemento": elemento,
+                "items": items,
+                "total_mes": total_mes,
+                "anio": anio,
+                "mes": mes,
+                "nombre_mes": nombre_mes,
+                "tipo": tipo,
+                "fecha_sugerida": fecha_sugerida,
             },
         )
 
@@ -192,7 +223,7 @@ class TransaccionesTablaHtmxView(LoginRequiredMixin, View):
             if busqueda:
                 qs_ing = qs_ing.filter(descripcion__icontains=busqueda)
             for ing in qs_ing:
-                elem_nom = ing.elemento.nombre if ing.elemento else (ing.descripcion or ing.get_fuente_display())
+                elem_nom = ing.elemento.nombre if ing.elemento else (ing.descripcion or "Ingreso")
                 cat_nom = ing.elemento.categoria.nombre if (ing.elemento and ing.elemento.categoria) else "Ingresos"
                 cat_col = ing.elemento.categoria.color if (ing.elemento and ing.elemento.categoria) else "#3BB8DB"
 

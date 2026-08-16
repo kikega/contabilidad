@@ -1,0 +1,105 @@
+<!-- MODAL HTMX DETALLE DE APUNTES DEL MES -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-150">
+  <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-lg w-full overflow-hidden scale-100 animate-in zoom-in-95 duration-150" onclick="event.stopPropagation()">
+    
+    <!-- Modal Header -->
+    <div class="p-5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-2xl {% if tipo == 'ingreso' %}bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400{% else %}bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400{% endif %} flex items-center justify-center">
+          <i data-lucide="{% if tipo == 'ingreso' %}arrow-down-left{% else %}receipt{% endif %}" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">
+            {{ elemento.nombre }}
+          </h3>
+          <p class="text-xs text-slate-400">
+            {{ nombre_mes }} {{ anio }} &bull; {{ elemento.categoria.nombre }}
+          </p>
+        </div>
+      </div>
+
+      <button type="button" onclick="cerrarDetalleModal()" class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Modal Content: List of Items -->
+    <div class="p-5 max-h-[60vh] overflow-y-auto space-y-3">
+      {% if items %}
+      <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
+        {% for item in items %}
+        <div class="py-3 flex items-center justify-between gap-3">
+          <div class="space-y-0.5">
+            <div class="text-xs font-bold text-slate-800 dark:text-slate-200">
+              {{ item.descripcion|default:elemento.nombre }}
+            </div>
+            <div class="text-[11px] text-slate-400 flex items-center space-x-2">
+              <span>{{ item.fecha|date:"d M Y" }}</span>
+              <span>&bull;</span>
+              <span>Por: {{ item.usuario.get_short_name|default:"Titular" }}</span>
+            </div>
+            {% if item.notas %}
+            <p class="text-[10px] text-slate-400 italic">{{ item.notas }}</p>
+            {% endif %}
+          </div>
+
+          <div class="flex items-center space-x-3">
+            <span class="text-sm font-black {% if tipo == 'ingreso' %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
+              {% if tipo == 'ingreso' %}+{% else %}-{% endif %}{{ item.monto|floatformat:2 }} €
+            </span>
+
+            <div class="flex items-center space-x-1">
+              {% if tipo == 'ingreso' %}
+              <a href="{% url 'finanzas:ingreso_update' item.id %}" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors" title="Editar">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              </a>
+              <form method="POST" action="{% url 'finanzas:ingreso_delete' item.id %}" onsubmit="return confirm('¿Eliminar este apunte?');" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer" title="Eliminar">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </form>
+              {% else %}
+              <a href="{% url 'finanzas:gasto_update' item.id %}" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors" title="Editar">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              </a>
+              <form method="POST" action="{% url 'finanzas:gasto_delete' item.id %}" onsubmit="return confirm('¿Eliminar este apunte?');" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer" title="Eliminar">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="py-8 text-center text-slate-400 text-xs italic">
+        No hay apuntes registrados en {{ nombre_mes }} {{ anio }} para este elemento.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Modal Footer -->
+    <div class="p-4 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
+      <div class="text-xs font-bold text-slate-600 dark:text-slate-300">
+        Total Mes: <span class="{% if tipo == 'ingreso' %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %} font-black">{{ total_mes|floatformat:2 }} €</span>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        {% if tipo == 'ingreso' %}
+        <a href="{% url 'finanzas:ingreso_create' %}?elemento={{ elemento.id }}&fecha={{ fecha_sugerida }}" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors">
+          + Añadir Apunte
+        </a>
+        {% else %}
+        <a href="{% url 'finanzas:gasto_create' %}?elemento={{ elemento.id }}&fecha={{ fecha_sugerida }}" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors">
+          + Añadir Apunte
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>

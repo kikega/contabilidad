@@ -135,7 +135,7 @@
                       {{ item.fecha|date:"d M Y" }}
                     </td>
                     <td class="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200">
-                      {{ item.descripcion|default:item.get_fuente_display }}
+                      {{ item.descripcion|default:elem_data.elemento.nombre }}
                     </td>
                     <td class="py-2 px-3 whitespace-nowrap text-slate-400 text-[11px] w-40">
                       Titular: {{ item.usuario.get_short_name|default:"-" }}

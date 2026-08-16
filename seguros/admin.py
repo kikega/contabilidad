@@ -7,6 +7,8 @@ from seguros.models import HistorialRenovacionSeguro, Seguro
 class HistorialRenovacionInline(admin.TabularInline):
     model = HistorialRenovacionSeguro
     extra = 1
+    fields = ("ejercicio_anio", "prima_pagada", "fecha_renovacion", "notas")
+    ordering = ("-ejercicio_anio",)
 
 
 @admin.register(Seguro)
@@ -16,14 +18,17 @@ class SeguroAdmin(admin.ModelAdmin):
         "ramo",
         "compania",
         "numero_poliza",
+        "elemento",
         "fecha_vencimiento",
         "prima_actual",
         "prima_anterior",
         "incremento_display",
         "activo",
     )
-    list_filter = ("ramo", "activo", "compania", "fecha_vencimiento")
+    list_filter = ("ramo", "activo", "compania", "periodicidad", "fecha_vencimiento")
     search_fields = ("bien_asegurado", "compania", "numero_poliza", "gestor_nombre", "notas_negociacion")
+    list_select_related = ("elemento", "usuario")
+    autocomplete_fields = ["elemento", "usuario"]
     inlines = [HistorialRenovacionInline]
     date_hierarchy = "fecha_vencimiento"
     ordering = ["fecha_vencimiento"]
@@ -40,4 +45,7 @@ class HistorialRenovacionSeguroAdmin(admin.ModelAdmin):
     list_display = ("seguro", "ejercicio_anio", "prima_pagada", "fecha_renovacion")
     list_filter = ("ejercicio_anio", "seguro__compania")
     search_fields = ("seguro__bien_asegurado", "seguro__compania", "notas")
+    list_select_related = ("seguro",)
+    autocomplete_fields = ["seguro"]
     ordering = ("-ejercicio_anio",)
+

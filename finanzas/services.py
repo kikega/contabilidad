@@ -253,7 +253,7 @@ class FinanzasService:
             if usuario_id:
                 qs_ing = qs_ing.filter(usuario_id=usuario_id)
             for ing in qs_ing.order_by("-fecha", "-creado_en")[:limite]:
-                elem_nom = ing.elemento.nombre if ing.elemento else (ing.descripcion or ing.get_fuente_display())
+                elem_nom = ing.elemento.nombre if ing.elemento else (ing.descripcion or "Ingreso")
                 cat_nom = ing.elemento.categoria.nombre if (ing.elemento and ing.elemento.categoria) else "Ingresos"
                 cat_col = ing.elemento.categoria.color if (ing.elemento and ing.elemento.categoria) else "#3BB8DB"
                 icono = ing.elemento.icono_efectivo if ing.elemento else "wallet"
@@ -432,6 +432,164 @@ class FinanzasService:
             "total_variables": total_variables,
             "balance_neto": balance_neto,
             "ratio_ahorro": ratio_ahorro,
+        }
+
+    @classmethod
+    def get_resumen_cuentas_anual(
+        cls,
+        anio: int,
+        usuario_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Calcula la matriz completa anual (12 meses) de ingresos y gastos organizados por categorías y elementos."""
+        filtro_ing = Q(fecha__year=anio)
+        filtro_gas = Q(fecha__year=anio)
+        if usuario_id:
+            filtro_ing &= Q(usuario_id=usuario_id)
+            filtro_gas &= Q(usuario_id=usuario_id)
+
+        ingresos_qs = Ingreso.objects.filter(filtro_ing).select_related("elemento__categoria", "usuario").order_by("fecha")
+        gastos_qs = Gasto.objects.filter(filtro_gas).select_related("elemento__categoria", "usuario").order_by("fecha")
+
+        # 1. Ingresos
+        categorias_ingreso_qs = (
+            Categoria.objects.filter(tipo=Categoria.Tipo.INGRESO)
+            .prefetch_related("elementos")
+            .order_by("nombre")
+        )
+
+        desglose_ingresos = []
+        totales_ingresos_mes = [Decimal("0.00")] * 12
+        total_anual_ingresos = Decimal("0.00")
+
+        for cat in categorias_ingreso_qs:
+            elementos_data = []
+            totales_mes_cat = [Decimal("0.00")] * 12
+            total_anual_cat = Decimal("0.00")
+
+            for elem in cat.elementos.all():
+                meses_elem = []
+                total_anual_elem = Decimal("0.00")
+
+                for m in range(1, 13):
+                    items_m = [ing for ing in ingresos_qs if ing.elemento_id == elem.id and ing.fecha.month == m]
+                    subtotal_m = sum((item.monto for item in items_m), Decimal("0.00"))
+
+                    meses_elem.append({
+                        "mes": m,
+                        "total": subtotal_m,
+                        "count": len(items_m),
+                        "items": items_m,
+                    })
+
+                    total_anual_elem += subtotal_m
+                    totales_mes_cat[m - 1] += subtotal_m
+                    totales_ingresos_mes[m - 1] += subtotal_m
+
+                total_anual_cat += total_anual_elem
+                total_anual_ingresos += total_anual_elem
+
+                elementos_data.append({
+                    "elemento": elem,
+                    "meses": meses_elem,
+                    "total_anual": total_anual_elem,
+                    "tiene_apuntes": total_anual_elem > Decimal("0.00"),
+                })
+
+            desglose_ingresos.append({
+                "categoria": cat,
+                "elementos": elementos_data,
+                "totales_meses": totales_mes_cat,
+                "total_anual": total_anual_cat,
+                "tiene_apuntes": total_anual_cat > Decimal("0.00"),
+            })
+
+        # 2. Gastos
+        categorias_gasto_qs = (
+            Categoria.objects.filter(tipo=Categoria.Tipo.GASTO)
+            .prefetch_related("elementos")
+            .order_by("nombre")
+        )
+
+        desglose_gastos = []
+        totales_gastos_mes = [Decimal("0.00")] * 12
+        total_anual_gastos = Decimal("0.00")
+
+        for cat in categorias_gasto_qs:
+            elementos_data = []
+            totales_mes_cat = [Decimal("0.00")] * 12
+            total_anual_cat = Decimal("0.00")
+
+            for elem in cat.elementos.all():
+                meses_elem = []
+                total_anual_elem = Decimal("0.00")
+
+                for m in range(1, 13):
+                    items_m = [gas for gas in gastos_qs if gas.elemento_id == elem.id and gas.fecha.month == m]
+                    subtotal_m = sum((item.monto for item in items_m), Decimal("0.00"))
+
+                    meses_elem.append({
+                        "mes": m,
+                        "total": subtotal_m,
+                        "count": len(items_m),
+                        "items": items_m,
+                    })
+
+                    total_anual_elem += subtotal_m
+                    totales_mes_cat[m - 1] += subtotal_m
+                    totales_gastos_mes[m - 1] += subtotal_m
+
+                total_anual_cat += total_anual_elem
+                total_anual_gastos += total_anual_elem
+
+                elementos_data.append({
+                    "elemento": elem,
+                    "meses": meses_elem,
+                    "total_anual": total_anual_elem,
+                    "tiene_apuntes": total_anual_elem > Decimal("0.00"),
+                })
+
+            desglose_gastos.append({
+                "categoria": cat,
+                "elementos": elementos_data,
+                "totales_meses": totales_mes_cat,
+                "total_anual": total_anual_cat,
+                "tiene_apuntes": total_anual_cat > Decimal("0.00"),
+            })
+
+        # 3. Totales globales mes a mes
+        resumen_global_meses = []
+        for m in range(1, 13):
+            ing_m = totales_ingresos_mes[m - 1]
+            gas_m = totales_gastos_mes[m - 1]
+            bal_m = ing_m - gas_m
+            resumen_global_meses.append({
+                "mes": m,
+                "nombre": cls.MESES_ABREV[m - 1],
+                "ingresos": ing_m,
+                "gastos": gas_m,
+                "balance": bal_m,
+            })
+
+        balance_anual = total_anual_ingresos - total_anual_gastos
+        ratio_ahorro_anual = (
+            ((balance_anual / total_anual_ingresos) * Decimal("100.00")).quantize(Decimal("0.01"))
+            if total_anual_ingresos > Decimal("0.00")
+            else Decimal("0.00")
+        )
+
+        return {
+            "anio": anio,
+            "meses_abrev": cls.MESES_ABREV,
+            "meses_nombres": cls.MESES_NOMBRES,
+            "desglose_ingresos": desglose_ingresos,
+            "desglose_gastos": desglose_gastos,
+            "totales_ingresos_mes": totales_ingresos_mes,
+            "totales_gastos_mes": totales_gastos_mes,
+            "resumen_global_meses": resumen_global_meses,
+            "total_anual_ingresos": total_anual_ingresos,
+            "total_anual_gastos": total_anual_gastos,
+            "balance_anual": balance_anual,
+            "ratio_ahorro_anual": ratio_ahorro_anual,
         }
 
     @classmethod

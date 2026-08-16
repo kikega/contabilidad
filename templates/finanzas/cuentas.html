@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Gestión de Cuentas y Apuntes - {{ resumen.nombre_mes }} {{ anio_actual }}{% endblock %}
+{% block title %}Libro Contable & Matriz Anual {{ anio_actual }} - Gestión Económica{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
@@ -9,10 +9,10 @@
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800">
     <div>
       <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-        Libro Contable & Apuntes Mensuales
+        Libro Contable & Cuentas Anuales
       </h1>
       <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-        Consulta, desglose y edición de apuntes organizados por categorías y periodos
+        Visión consolidada de 12 meses por categoría para auditar el flujo anual de ingresos y gastos de un vistazo
       </p>
     </div>
 
@@ -29,77 +29,47 @@
     </div>
   </div>
 
-  <!-- Selector de Año y Pestañas de Meses (Reactivo con HTMX) -->
-  <div class="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+  <!-- Selector de Año Dinámico (Reactivo con HTMX) -->
+  <div class="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
     
-    <!-- Barra Superior: Selector de Año y Navegación Mes Anterior/Siguiente -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
-      
-      <!-- Selector de Año -->
-      <div class="flex items-center space-x-2">
-        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Ejercicio Anual:</span>
-        <div class="flex items-center space-x-1">
-          {% for a in anios_disponibles %}
-          <button 
-            type="button"
-            hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ a }}&mes={{ mes_actual }}"
-            hx-target="#cuentas-contenido-container"
-            onclick="updateActiveYear(this, {{ a }})"
-            class="year-btn px-3 py-1 rounded-lg text-xs font-bold transition-all {% if a == anio_actual %}bg-cyan-500 text-white shadow-sm shadow-cyan-500/30{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}"
-          >
-            {{ a }}
-          </button>
-          {% endfor %}
-        </div>
+    <div class="flex items-center space-x-2.5">
+      <div class="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+        <i data-lucide="calendar" class="w-4 h-4"></i>
       </div>
-
-      <!-- Navegación de Mes Rápida -->
-      <div class="flex items-center space-x-2 text-xs">
+      <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        Ejercicio Anual:
+      </span>
+      <div class="flex items-center space-x-1.5" id="year-buttons-group">
+        {% for a in anios_disponibles %}
         <button 
           type="button"
-          hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ resumen.prev_anio }}&mes={{ resumen.prev_mes }}"
+          hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ a }}"
           hx-target="#cuentas-contenido-container"
-          class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center space-x-1 transition-colors"
+          onclick="updateActiveYear(this, {{ a }})"
+          class="year-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer {% if a == anio_actual %}bg-cyan-500 text-white shadow-sm shadow-cyan-500/30{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}"
         >
-          <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
-          <span>Mes Anterior</span>
+          {{ a }}
         </button>
-
-        <button 
-          type="button"
-          hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ resumen.next_anio }}&mes={{ resumen.next_mes }}"
-          hx-target="#cuentas-contenido-container"
-          class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center space-x-1 transition-colors"
-        >
-          <span>Mes Siguiente</span>
-          <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
-        </button>
+        {% empty %}
+        <span class="text-xs text-slate-400">{{ anio_actual }}</span>
+        {% endfor %}
       </div>
-
     </div>
 
-    <!-- 12 Pestañas de Meses -->
-    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-      {% for num_m, nom_m in meses_lista %}
-      <button 
-        type="button"
-        id="tab-mes-{{ num_m }}"
-        hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ anio_actual }}&mes={{ num_m }}"
-        hx-target="#cuentas-contenido-container"
-        onclick="updateActiveMonth(this)"
-        class="month-tab px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center space-x-1 {% if num_m == mes_actual %}bg-cyan-50 dark:bg-cyan-950/70 text-cyan-700 dark:text-cyan-400 border border-cyan-300 dark:border-cyan-700 shadow-sm{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/80{% endif %}"
-      >
-        <span>{{ nom_m }}</span>
-      </button>
-      {% endfor %}
+    <div class="text-xs text-slate-400 flex items-center space-x-1">
+      <i data-lucide="info" class="w-3.5 h-3.5 text-cyan-500"></i>
+      <span>Haz clic en cualquier importe para ver o gestionar los apuntes individuales del mes.</span>
     </div>
 
   </div>
 
-  <!-- Contenedor Dinámico HTMX para los datos del Mes -->
+  <!-- Contenedor Dinámico HTMX con la Matriz de 12 Meses -->
   <div id="cuentas-contenido-container">
-    {% include "finanzas/partials/cuentas_mes.html" %}
+    {% include "finanzas/partials/cuentas_anual.html" %}
   </div>
+
+  <!-- Contenedor para el Modal de Detalle de Apuntes -->
+  <div id="detalle-apuntes-modal-container"></div>
 
 </div>
 {% endblock %}
@@ -107,15 +77,6 @@
 {% block extra_js %}
 <script>
   let currentSelectedYear = {{ anio_actual }};
-
-  function updateActiveMonth(btn) {
-    document.querySelectorAll('.month-tab').forEach(el => {
-      el.classList.remove('bg-cyan-50', 'dark:bg-cyan-950/70', 'text-cyan-700', 'dark:text-cyan-400', 'border', 'border-cyan-300', 'dark:border-cyan-700', 'shadow-sm');
-      el.classList.add('text-slate-600', 'dark:text-slate-400');
-    });
-    btn.classList.remove('text-slate-600', 'dark:text-slate-400');
-    btn.classList.add('bg-cyan-50', 'dark:bg-cyan-950/70', 'text-cyan-700', 'dark:text-cyan-400', 'border', 'border-cyan-300', 'dark:border-cyan-700', 'shadow-sm');
-  }
 
   function updateActiveYear(btn, year) {
     currentSelectedYear = year;
@@ -125,13 +86,34 @@
     });
     btn.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
     btn.classList.add('bg-cyan-500', 'text-white', 'shadow-sm', 'shadow-cyan-500/30');
+  }
 
-    // Update month tabs hx-get URLs with the new year
-    document.querySelectorAll('.month-tab').forEach((tab, index) => {
-      const monthNum = index + 1;
-      tab.setAttribute('hx-get', `{% url 'finanzas:cuentas_mes_htmx' %}?anio=${year}&mes=${monthNum}`);
-      htmx.process(tab);
+  function mostrarDetalleApuntes(nombreElemento, mes, anio, tipo, elementoId) {
+    const container = document.getElementById('detalle-apuntes-modal-container');
+    htmx.ajax('GET', `{% url 'finanzas:elemento_mes_detalle_htmx' %}?elemento_id=${elementoId}&anio=${anio}&mes=${mes}&tipo=${tipo}`, {
+      target: '#detalle-apuntes-modal-container',
+      swap: 'innerHTML'
     });
   }
+
+  function cerrarDetalleModal() {
+    const container = document.getElementById('detalle-apuntes-modal-container');
+    container.innerHTML = '';
+  }
+
+  // Cerrar modal al presionar Escape
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+      cerrarDetalleModal();
+    }
+  });
+
+  // Re-iniciar lucide icons cuando HTMX cargue contenido
+  document.addEventListener('htmx:afterSwap', function() {
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons();
+    }
+  });
 </script>
 {% endblock %}
+
