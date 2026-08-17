@@ -32,11 +32,13 @@ class CategoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Elemento)
 class ElementoAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "categoria", "es_fijo", "icono", "poliza_seguro_vinculada", "creado_en")
-    list_filter = ("categoria__tipo", "categoria", "es_fijo")
+    list_display = ("nombre", "categoria", "es_fijo", "finalizado", "icono", "poliza_seguro_vinculada", "creado_en")
+    list_filter = ("categoria__tipo", "categoria", "es_fijo", "finalizado")
     search_fields = ("nombre", "categoria__nombre", "descripcion")
     ordering = ("categoria", "nombre")
     autocomplete_fields = ["categoria"]
+    list_editable = ("finalizado",)
+    list_select_related = ("categoria",)
 
     @admin.display(description="Seguro Vinculado")
     def poliza_seguro_vinculada(self, obj: Elemento) -> str:

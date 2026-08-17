@@ -303,7 +303,14 @@
                     <i data-lucide="{{ elem_data.elemento.icono_efectivo|default:'tag' }}" class="w-3.5 h-3.5"></i>
                   </span>
                   <div>
-                    <div class="font-bold text-slate-800 dark:text-slate-200 text-xs">{{ elem_data.elemento.nombre }}</div>
+                    <div class="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                      {{ elem_data.elemento.nombre }}
+                      {% if elem_data.elemento.finalizado %}
+                      <span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                        <i data-lucide="check-circle" class="w-2.5 h-2.5 mr-0.5"></i> Pagado
+                      </span>
+                      {% endif %}
+                    </div>
                     {% if elem_data.elemento.seguro %}
                     <span class="text-[10px] text-cyan-600 dark:text-cyan-400 flex items-center">
                       <i data-lucide="shield" class="w-2.5 h-2.5 mr-0.5"></i> Póliza {{ elem_data.elemento.seguro.compania }}
@@ -329,6 +336,9 @@
                   {% endif %}
                 </button>
                 {% else %}
+                {% if elem_data.elemento.finalizado %}
+                <span class="block px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 text-right">—</span>
+                {% else %}
                 <a 
                   href="{% url 'finanzas:gasto_create' %}?elemento={{ elem_data.elemento.id }}"
                   class="block px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-right"
@@ -336,6 +346,7 @@
                 >
                   —
                 </a>
+                {% endif %}
                 {% endif %}
               </td>
               {% endfor %}

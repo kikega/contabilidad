@@ -31,41 +31,63 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+          <label for="id_categoria" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+            Categoría de Gasto *
+          </label>
+          {{ form.categoria }}
+        </div>
+
+        <div>
+          <label for="id_elemento" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
             Elemento / Subcategoría *
           </label>
           {{ form.elemento }}
         </div>
+      </div>
 
-        <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-            Concepto del Apunte *
-          </label>
-          {{ form.concepto }}
-        </div>
+      <div id="concepto-field">
+        <label for="id_concepto" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+          Concepto del Apunte <span id="concepto-required-star">*</span>
+        </label>
+        {{ form.concepto }}
+      </div>
+
+      <div id="concepto-auto-hint" class="hidden p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300">
+        <i data-lucide="credit-card" class="w-4 h-4 inline-block mr-1 -mt-0.5"></i>
+        Gasto acumulado de tarjeta: el concepto se genera automáticamente como liquidación del mes anterior (se paga el día 1 del mes siguiente).
+      </div>
+
+      <div id="concepto-recurrente-hint" class="hidden p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
+        <i data-lucide="repeat" class="w-4 h-4 inline-block mr-1 -mt-0.5"></i>
+        Elemento recurrente: si dejas el concepto vacío, se genera automáticamente como "Cuota <strong>{{ form.instance.elemento.nombre|default:"" }}</strong> (MM/AAAA)".
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+          <label for="id_monto" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
             Importe (€) *
           </label>
           {{ form.monto }}
         </div>
 
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+          <label for="id_fecha" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
             Fecha del Gasto *
           </label>
           {{ form.fecha }}
         </div>
       </div>
 
-      <div class="flex items-center space-x-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800">
+      <div id="recurrente-field" class="flex items-center space-x-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800">
         {{ form.es_fijo }}
         <label for="id_es_fijo" class="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
           ¿Es un gasto fijo mensual recurrente? (Hipoteca, comunidad, suscripciones...)
         </label>
+      </div>
+
+      <div id="recurrente-auto-hint" class="hidden p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-700 dark:text-emerald-300">
+        <i data-lucide="repeat" class="w-4 h-4 inline-block mr-1 -mt-0.5"></i>
+        Elemento marcado como <strong>gasto fijo recurrente</strong>: se aplica automáticamente.
       </div>
 
       <div>
@@ -86,4 +108,89 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ gasto_config|json_script:"gasto-config" }}
+<script>
+(function () {
+  const config = JSON.parse(document.getElementById('gasto-config').textContent);
+  const catSelect = document.getElementById('id_categoria');
+  const elemSelect = document.getElementById('id_elemento');
+  const conceptoField = document.getElementById('concepto-field');
+  const conceptoHint = document.getElementById('concepto-auto-hint');
+  const conceptoRecHint = document.getElementById('concepto-recurrente-hint');
+  const conceptoStar = document.getElementById('concepto-required-star');
+  const recurrenteField = document.getElementById('recurrente-field');
+  const recurrenteHint = document.getElementById('recurrente-auto-hint');
+  const esFijoCheck = document.getElementById('id_es_fijo');
+
+  const categoriasTarjeta = (config.categorias_tarjeta || []).map(Number);
+  const esEdicion = {{ object.pk|yesno:"true,false" }};
+
+  function esTarjeta() {
+    return categoriasTarjeta.includes(Number(catSelect.value));
+  }
+
+  function elementoSeleccionado() {
+    const lista = config.elementos_por_categoria[catSelect.value] || [];
+    const sel = Number(elemSelect.value);
+    for (const el of lista) {
+      if (el.id === sel) return el;
+    }
+    return null;
+  }
+
+  function actualizarRecurrente() {
+    const el = elementoSeleccionado();
+    const fijo = !!(el && el.es_fijo);
+    recurrenteField.classList.toggle('hidden', fijo);
+    recurrenteHint.classList.toggle('hidden', !fijo);
+    if (fijo || !esEdicion) {
+      esFijoCheck.checked = fijo;
+    }
+  }
+
+  function filtrarElementos() {
+    const prevSel = elemSelect.value;
+    const lista = config.elementos_por_categoria[catSelect.value] || [];
+    elemSelect.innerHTML = '';
+    let huboSeleccion = false;
+    lista.forEach(function (el) {
+      const opt = document.createElement('option');
+      opt.value = el.id;
+      opt.textContent = el.nombre;
+      if (String(el.id) === String(prevSel)) {
+        opt.selected = true;
+        huboSeleccion = true;
+      }
+      elemSelect.appendChild(opt);
+    });
+    if (!huboSeleccion && lista.length > 0) {
+      elemSelect.value = lista[0].id;
+    }
+  }
+
+  function actualizarConcepto() {
+    const tarjeta = esTarjeta();
+    const fijo = elementoSeleccionado() ? !!(elementoSeleccionado().es_fijo) : false;
+    const auto = tarjeta || fijo;
+    conceptoField.classList.toggle('hidden', tarjeta);
+    if (conceptoHint) conceptoHint.classList.toggle('hidden', !tarjeta);
+    if (conceptoRecHint) conceptoRecHint.classList.toggle('hidden', !fijo || tarjeta);
+    if (conceptoStar) conceptoStar.classList.toggle('hidden', auto);
+  }
+
+  function actualizarTodo() {
+    filtrarElementos();
+    actualizarConcepto();
+    actualizarRecurrente();
+  }
+
+  catSelect.addEventListener('change', actualizarTodo);
+  elemSelect.addEventListener('change', actualizarTodo);
+
+  actualizarTodo();
+})();
+</script>
 {% endblock %}

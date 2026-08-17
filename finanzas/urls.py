@@ -25,7 +25,6 @@ from finanzas.views import (
     IngresoCreateView,
     IngresoDeleteView,
     IngresoUpdateView,
-    MatrizAhorrosHtmxView,
     TransaccionesTablaHtmxView,
 )
 
@@ -38,7 +37,6 @@ urlpatterns = [
     path("cuentas/mes-htmx/", CuentasMesHtmxView.as_view(), name="cuentas_mes_htmx"),
     path("cuentas/elemento-mes-detalle/", ElementoMesDetalleHtmxView.as_view(), name="elemento_mes_detalle_htmx"),
     path("ahorros/", AhorrosListView.as_view(), name="ahorros"),
-    path("ahorros/matriz-htmx/", MatrizAhorrosHtmxView.as_view(), name="ahorros_matriz_htmx"),
     path("ahorros/guardar-saldo-htmx/", GuardarSaldoMensualHtmxView.as_view(), name="guardar_saldo_mes_htmx"),
     path("ahorros/cuentas/nueva/", CuentaAhorroCreateView.as_view(), name="cuenta_ahorro_create"),
     path("ahorros/cuentas/<int:pk>/editar/", CuentaAhorroUpdateView.as_view(), name="cuenta_ahorro_update"),

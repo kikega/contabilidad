@@ -25,7 +25,7 @@
 
     <!-- Controles de Acción y Selector de Año -->
     <div class="flex flex-wrap items-center gap-3">
-      <!-- Selector de Años con HTMX -->
+      <!-- Selector de Años -->
       <div class="inline-flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
         <span class="text-xs font-semibold text-slate-400 px-2.5 flex items-center">
           <i data-lucide="calendar" class="w-3.5 h-3.5 mr-1"></i> Año
@@ -34,10 +34,6 @@
           {% for a in anios_disponibles %}
           <a
             href="?anio={{ a }}"
-            hx-get="{% url 'finanzas:ahorros_matriz_htmx' %}?anio={{ a }}"
-            hx-target="#matriz-ahorros-container"
-            hx-swap="innerHTML"
-            onclick="cambiarAnioActivo(this, '{{ a }}')"
             class="btn-anio px-3 py-1.5 rounded-xl text-xs font-bold transition-all {% if a == anio_actual %}bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-sm border border-slate-200 dark:border-slate-700{% else %}text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white{% endif %}"
           >
             {{ a }}
@@ -512,17 +508,6 @@
       cerrarModalSaldo();
     }
   });
-
-  function cambiarAnioActivo(btn, anio) {
-    document.querySelectorAll('.btn-anio').forEach(b => {
-      b.className = 'btn-anio px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
-    });
-    btn.className = 'btn-anio px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-sm border border-slate-200 dark:border-slate-700';
-    
-    document.querySelectorAll('.chart-anio-label').forEach(el => el.textContent = anio);
-    const textoMatriz = document.getElementById('texto-anio-matriz');
-    if (textoMatriz) textoMatriz.textContent = anio;
-  }
 
   // FUNCIONES DE CONTROL DEL MODAL POPUP
   function abrirModalSaldo(cuentaId, anio, mes, saldo, notas) {

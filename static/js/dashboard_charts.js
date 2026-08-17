@@ -7,6 +7,8 @@ class DashboardChartsManager {
     this.chartIngresosGastos = null;
     this.chartAhorroAcumulado = null;
     this.chartDistribucion = null;
+    this.chartComparativa = null;
+    this.chartCategoriasAnual = null;
   }
 
   isDarkMode() {
@@ -266,9 +268,187 @@ class DashboardChartsManager {
       .catch((err) => console.error('Error al actualizar gráficos:', err));
   }
 
+  initComparativa(data) {
+    if (!data) return;
+    this.renderChartComparativa(data);
+    this.renderChartCategoriasAnual(data);
+  }
+
+  renderChartComparativa(data) {
+    const ctx = document.getElementById('chartComparativa');
+    if (!ctx) return;
+
+    if (this.chartComparativa) {
+      this.chartComparativa.destroy();
+    }
+
+    const colors = this.getThemeColors();
+    const ahorroBg = this.isDarkMode() ? 'rgba(52, 211, 153, 0.8)' : 'rgba(16, 185, 129, 0.85)';
+
+    this.chartComparativa = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.anios,
+        datasets: [
+          {
+            label: 'Ingresos (€)',
+            data: data.ingresos,
+            backgroundColor: colors.ingresosBg,
+            borderRadius: 6,
+            barPercentage: 0.7,
+            categoryPercentage: 0.55,
+          },
+          {
+            label: 'Gastos (€)',
+            data: data.gastos,
+            backgroundColor: colors.gastosBg,
+            borderRadius: 6,
+            barPercentage: 0.7,
+            categoryPercentage: 0.55,
+          },
+          {
+            label: 'Ahorro (€)',
+            data: data.ahorro,
+            backgroundColor: ahorroBg,
+            borderRadius: 6,
+            barPercentage: 0.7,
+            categoryPercentage: 0.55,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              color: colors.textColor,
+              usePointStyle: true,
+              pointStyle: 'circle',
+              boxWidth: 8,
+              font: { size: 11, family: 'system-ui' },
+            },
+          },
+          tooltip: {
+            backgroundColor: colors.tooltipBg,
+            titleColor: colors.tooltipText,
+            bodyColor: colors.tooltipText,
+            borderColor: colors.tooltipBorder,
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              label: (context) => ` ${context.dataset.label}: ${context.raw.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: colors.textColor, font: { size: 11 } },
+          },
+          y: {
+            grid: { color: colors.gridColor },
+            ticks: {
+              color: colors.textColor,
+              font: { size: 11 },
+              callback: (value) => `${value} €`,
+            },
+          },
+        },
+      },
+    });
+  }
+
+  renderChartCategoriasAnual(data) {
+    const ctx = document.getElementById('chartCategoriasAnual');
+    if (!ctx) return;
+
+    if (this.chartCategoriasAnual) {
+      this.chartCategoriasAnual.destroy();
+    }
+
+    const colors = this.getThemeColors();
+    const cats = data.categorias;
+    const porAnio = cats.por_anio || {};
+
+    if (!cats.labels || cats.labels.length === 0) {
+      return;
+    }
+
+    const datasets = cats.labels.map((label, idx) => ({
+      label: label,
+      data: data.anios.map((anio) => (porAnio[String(anio)] || [])[idx] ?? 0),
+      backgroundColor: cats.colors[idx],
+      borderRadius: 3,
+    }));
+
+    this.chartCategoriasAnual = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.anios,
+        datasets: datasets,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: colors.textColor,
+              usePointStyle: true,
+              pointStyle: 'circle',
+              boxWidth: 8,
+              font: { size: 10, family: 'system-ui' },
+            },
+          },
+          tooltip: {
+            backgroundColor: colors.tooltipBg,
+            titleColor: colors.tooltipText,
+            bodyColor: colors.tooltipText,
+            borderColor: colors.tooltipBorder,
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              label: (context) => ` ${context.dataset.label}: ${context.raw.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            ticks: { color: colors.textColor, font: { size: 11 } },
+          },
+          y: {
+            stacked: true,
+            grid: { color: colors.gridColor },
+            ticks: {
+              color: colors.textColor,
+              font: { size: 11 },
+              callback: (value) => `${value} €`,
+            },
+          },
+        },
+      },
+    });
+  }
+
   actualizarTema() {
     if (window.initialChartData) {
       this.init(window.initialChartData);
+    }
+    if (window.comparativaChartData) {
+      this.initComparativa(window.comparativaChartData);
     }
   }
 }

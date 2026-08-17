@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
 from django.db.models import Case, Count, DecimalField, IntegerField, Q, Sum, Value, When, QuerySet
-from django.db.models.functions import Coalesce, TruncMonth
+from django.db.models.functions import Coalesce, ExtractYear, TruncMonth
 from django.utils import timezone
 
 from finanzas.models import (
@@ -256,65 +256,105 @@ class FinanzasService:
         }
 
     @classmethod
-    def get_movimientos_recientes(
+    def get_comparativa_anual(
         cls,
-        limite: int = 10,
-        tipo_filtro: str = "TODOS",
-        usuario_id: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
-        """Devuelve un listado consolidado y ordenado cronológicamente de los movimientos más recientes."""
-        movimientos: List[Dict[str, Any]] = []
+        usuario_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Agrega por año los ingresos, gastos (con desglose por categoría) y el ahorro,
+        para comparar diferencias y tendencias entre ejercicios de un vistazo."""
+        filtro_ing = Q()
+        filtro_gas = Q()
+        if usuario_id:
+            filtro_ing = Q(usuario_id=usuario_id)
+            filtro_gas = Q(usuario_id=usuario_id)
 
-        if tipo_filtro in ["TODOS", "INGRESO"]:
-            qs_ing = Ingreso.objects.select_related("elemento__categoria", "usuario").all()
-            if usuario_id:
-                qs_ing = qs_ing.filter(usuario_id=usuario_id)
-            for ing in qs_ing.order_by("-fecha", "-creado_en")[:limite]:
-                elem_nom = ing.elemento.nombre if ing.elemento else (ing.descripcion or "Ingreso")
-                cat_nom = ing.elemento.categoria.nombre if (ing.elemento and ing.elemento.categoria) else "Ingresos"
-                cat_col = ing.elemento.categoria.color if (ing.elemento and ing.elemento.categoria) else "#3BB8DB"
-                icono = ing.elemento.icono_efectivo if ing.elemento else "wallet"
+        anios = cls.get_anios_disponibles(usuario_id)
 
-                movimientos.append({
-                    "id": ing.id,
-                    "tipo": "INGRESO",
-                    "fecha": ing.fecha,
-                    "concepto": ing.descripcion or elem_nom,
-                    "elemento": elem_nom,
-                    "categoria": cat_nom,
-                    "categoria_color": cat_col,
-                    "icono": icono,
-                    "monto": ing.monto,
-                    "usuario": ing.usuario.get_short_name() if ing.usuario else "-",
-                    "es_positivo": True,
-                })
+        # Ingresos totales por año
+        ingresos_qs = (
+            Ingreso.objects.filter(filtro_ing)
+            .annotate(anio=ExtractYear("fecha"))
+            .values("anio")
+            .annotate(total=Sum("monto"))
+        )
+        ingresos_por_anio = {int(f["anio"]): f["total"] for f in ingresos_qs}
 
-        if tipo_filtro in ["TODOS", "GASTO"]:
-            qs_gas = Gasto.objects.select_related("elemento__categoria", "usuario").all()
-            if usuario_id:
-                qs_gas = qs_gas.filter(usuario_id=usuario_id)
-            for gas in qs_gas.order_by("-fecha", "-creado_en")[:limite]:
-                elem_nom = gas.elemento.nombre if gas.elemento else gas.concepto
-                cat_nom = gas.elemento.categoria.nombre if (gas.elemento and gas.elemento.categoria) else "Gastos"
-                cat_col = gas.elemento.categoria.color if (gas.elemento and gas.elemento.categoria) else "#015F78"
-                icono = gas.elemento.icono_efectivo if gas.elemento else "folder"
+        # Gastos por año y categoría (2 queries de agregación, sin N+1)
+        gastos_qs = (
+            Gasto.objects.filter(filtro_gas, elemento__categoria__tipo=Categoria.Tipo.GASTO)
+            .annotate(anio=ExtractYear("fecha"))
+            .values("anio", "elemento__categoria_id", "elemento__categoria__nombre", "elemento__categoria__color")
+            .annotate(total=Sum("monto"))
+        )
 
-                movimientos.append({
-                    "id": gas.id,
-                    "tipo": "GASTO",
-                    "fecha": gas.fecha,
-                    "concepto": gas.concepto,
-                    "elemento": elem_nom,
-                    "categoria": cat_nom,
-                    "categoria_color": cat_col,
-                    "icono": icono,
-                    "monto": gas.monto,
-                    "usuario": gas.usuario.get_short_name() if gas.usuario else "-",
-                    "es_positivo": False,
-                })
+        gastos_por_cat: Dict[int, Dict[int, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+        categorias_info: Dict[int, Dict[str, str]] = {}
+        gastos_por_anio: Dict[int, Decimal] = defaultdict(Decimal)
+        for f in gastos_qs:
+            cid = f["elemento__categoria_id"]
+            anio = int(f["anio"])
+            categorias_info[cid] = {
+                "nombre": f["elemento__categoria__nombre"] or "Varios",
+                "color": f["elemento__categoria__color"] or "#3BB8DB",
+            }
+            gastos_por_cat[cid][anio] = f["total"]
+            gastos_por_anio[anio] += f["total"]
 
-        movimientos.sort(key=lambda x: x["fecha"], reverse=True)
-        return movimientos[:limite]
+        # Categorías ordenadas por su total histórico (mayor a menor)
+        total_historico = {
+            cid: sum(gastos_por_cat[cid].values(), Decimal("0.00"))
+            for cid in gastos_por_cat
+        }
+        categorias_orden = sorted(total_historico, key=lambda cid: total_historico[cid], reverse=True)
+
+        filas = []
+        for anio in anios:
+            total_ing = ingresos_por_anio.get(anio, Decimal("0.00"))
+            total_gas = gastos_por_anio.get(anio, Decimal("0.00"))
+            ahorro = total_ing - total_gas
+            ratio = (
+                ((ahorro / total_ing) * Decimal("100.00")).quantize(Decimal("0.01"))
+                if total_ing > Decimal("0.00")
+                else Decimal("0.00")
+            )
+            filas.append({
+                "anio": anio,
+                "ingresos": total_ing,
+                "gastos": total_gas,
+                "ahorro": ahorro,
+                "ratio_ahorro": ratio,
+                "categorias": {
+                    cid: gastos_por_cat[cid].get(anio, Decimal("0.00"))
+                    for cid in categorias_orden
+                },
+            })
+
+        return {
+            "anios": anios,
+            "filas": filas,
+            "categorias": [
+                {
+                    "id": cid,
+                    "nombre": categorias_info[cid]["nombre"],
+                    "color": categorias_info[cid]["color"],
+                }
+                for cid in categorias_orden
+            ],
+            "graficos": {
+                "anios": anios,
+                "ingresos": [float(f["ingresos"]) for f in filas],
+                "gastos": [float(f["gastos"]) for f in filas],
+                "ahorro": [float(f["ahorro"]) for f in filas],
+                "categorias": {
+                    "labels": [categorias_info[cid]["nombre"] for cid in categorias_orden],
+                    "colors": [categorias_info[cid]["color"] for cid in categorias_orden],
+                    "por_anio": {
+                        str(anio): [float(f["categorias"][cid]) for cid in categorias_orden]
+                        for anio, f in zip(anios, filas)
+                    },
+                },
+            },
+        }
 
     @classmethod
     def get_resumen_cuentas_anual(
@@ -618,12 +658,30 @@ class FinanzasService:
         else:
             totales_anio_anterior = [None] * 12
 
+        # Matriz transpuesta para la vista: cada mes como fila y una columna por cuenta
+        totales_por_mes = {t["mes"]: t for t in totales_meses_data}
+        matriz_por_mes = []
+        for m in range(1, 13):
+            total_mes = totales_por_mes.get(m, {"total": None, "variacion_mes": Decimal("0.00")})
+            matriz_por_mes.append({
+                "mes": m,
+                "abrev": cls.MESES_ABREV[m - 1],
+                "nombre": cls.MESES_NOMBRES[m - 1],
+                "cuentas": [
+                    {**fila["meses"][m - 1], "cuenta_id": fila["cuenta"].id}
+                    for fila in filas_cuentas
+                ],
+                "total": total_mes.get("total"),
+                "variacion_mes": total_mes.get("variacion_mes", Decimal("0.00")),
+            })
+
         return {
             "anio": anio,
             "meses_abrev": cls.MESES_ABREV,
             "meses_nombres": cls.MESES_NOMBRES,
             "meses_lista": list(enumerate(cls.MESES_NOMBRES, 1)),
             "filas_cuentas": filas_cuentas,
+            "matriz_por_mes": matriz_por_mes,
             "totales_meses": totales_meses_data,
             "kpis": {
                 "total_ahorro_actual": total_ahorro_actual,

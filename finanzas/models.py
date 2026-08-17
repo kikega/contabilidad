@@ -95,6 +95,17 @@ class Elemento(models.Model):
         validators=[ICONO_VALIDATOR],
         help_text=_("Icono específico opcional. Si está vacío heredará el icono de su categoría."),
     )
+    finalizado = models.BooleanField(
+        _("finalizado / pagado"),
+        default=False,
+        help_text=_("Marca cuando este compromiso se ha terminado de pagar (ej: hipoteca liquidada)."),
+    )
+    fecha_finalizacion = models.DateField(
+        _("fecha de finalización"),
+        null=True,
+        blank=True,
+        help_text=_("Fecha en la que se terminó de pagar (opcional)."),
+    )
     descripcion = models.TextField(_("descripción"), blank=True)
     creado_en = models.DateTimeField(_("creado en"), auto_now_add=True)
     actualizado_en = models.DateTimeField(_("actualizado en"), auto_now=True)

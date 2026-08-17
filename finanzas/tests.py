@@ -31,6 +31,12 @@ class FinanzasIntegrationTests(TestCase):
         self.assertTrue(Gasto.objects.count() > 0)
         self.assertTrue(Seguro.objects.count() >= 2)
 
+        # Estructura de préstamos y renting según el diseño de ingresos/gastos generalizados
+        self.assertTrue(Categoria.objects.filter(nombre="Préstamos & Financiaciones", tipo=Categoria.Tipo.GASTO).exists())
+        self.assertTrue(Elemento.objects.filter(nombre="Hipoteca / Alquiler", categoria__nombre="Préstamos & Financiaciones").exists())
+        self.assertTrue(Elemento.objects.filter(nombre="Renting Coche", categoria__nombre="Coches & Movilidad").exists())
+        self.assertFalse(Elemento.objects.filter(nombre="Préstamo Coche").exists())
+
     def test_dashboard_full_render_with_seeded_data(self) -> None:
         """Verifica la respuesta 200 y el contexto del Dashboard con datos cargados."""
         call_command("seed_data", force=True)
@@ -43,8 +49,47 @@ class FinanzasIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("kpis", response.context)
         self.assertIn("graficos_data", response.context)
-        self.assertIn("movimientos_recientes", response.context)
+        self.assertIn("comparativa_anual", response.context)
         self.assertGreater(response.context["kpis"]["total_ingresos"], Decimal("0.00"))
+        self.assertContains(response, "Comparativa Anual")
+        self.assertTrue(response.context["comparativa_anual"]["filas"])
+
+    def test_comparativa_anual_agregaciones_por_anio(self) -> None:
+        """Verifica que la comparativa anual agrega ingresos, gastos por categoría y ahorro por año."""
+        from datetime import date
+
+        carlos = Usuario.objects.create_user(email="comp@familia.com", password="password123")
+        cat_ing = Categoria.objects.create(nombre="Nóminas", tipo=Categoria.Tipo.INGRESO)
+        elem_ing = Elemento.objects.create(categoria=cat_ing, nombre="Sueldo Carlos")
+        cat_gas = Categoria.objects.create(nombre="Gastos Casa", tipo=Categoria.Tipo.GASTO, color="#10B981")
+        elem_hip = Elemento.objects.create(categoria=cat_gas, nombre="Hipoteca / Alquiler", es_fijo=True)
+
+        Ingreso.objects.create(usuario=carlos, elemento=elem_ing, monto=Decimal("3000.00"), fecha=date(2025, 1, 10))
+        Ingreso.objects.create(usuario=carlos, elemento=elem_ing, monto=Decimal("3200.00"), fecha=date(2026, 1, 10))
+        Gasto.objects.create(usuario=carlos, elemento=elem_hip, concepto="Cuota", monto=Decimal("850.00"), fecha=date(2025, 1, 5))
+        Gasto.objects.create(usuario=carlos, elemento=elem_hip, concepto="Cuota", monto=Decimal("900.00"), fecha=date(2026, 1, 5))
+
+        resumen = FinanzasService.get_comparativa_anual()
+        filas = {f["anio"]: f for f in resumen["filas"]}
+
+        self.assertEqual(set(filas.keys()), {2025, 2026})
+        self.assertEqual(filas[2025]["ingresos"], Decimal("3000.00"))
+        self.assertEqual(filas[2025]["gastos"], Decimal("850.00"))
+        self.assertEqual(filas[2025]["ahorro"], Decimal("2150.00"))
+        self.assertEqual(filas[2026]["ingresos"], Decimal("3200.00"))
+        self.assertEqual(filas[2026]["gastos"], Decimal("900.00"))
+
+        # Desglose por categoría alineado con la lista de categorías
+        self.assertEqual(len(resumen["categorias"]), 1)
+        self.assertEqual(resumen["categorias"][0]["nombre"], "Gastos Casa")
+        self.assertEqual(
+            filas[2025]["categorias"][resumen["categorias"][0]["id"]],
+            Decimal("850.00"),
+        )
+
+        # Series del gráfico
+        self.assertEqual(resumen["graficos"]["ingresos"], [3000.0, 3200.0])
+        self.assertEqual(resumen["graficos"]["ahorro"], [2150.0, 2300.0])
 
     def test_htmx_tabla_transacciones_endpoint(self) -> None:
         """Verifica el endpoint HTMX para la tabla parcial con filtros y paginación."""
@@ -434,6 +479,7 @@ class FinanzasIntegrationTests(TestCase):
         response = client.post(
             reverse("finanzas:gasto_create"),
             {
+                "categoria": cat_gasto.id,
                 "concepto": "Compra",
                 "elemento": elem_gasto.id,
                 "monto": "20.00",
@@ -445,6 +491,150 @@ class FinanzasIntegrationTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertIn("/cuentas/", response["Location"])
+
+    def test_gasto_tarjeta_concepto_automatico_y_elementos_filtrados(self) -> None:
+        """Verifica que en la categoría de tarjetas solo aparecen sus elementos y el concepto se genera solo."""
+        from datetime import date
+
+        carlos = Usuario.objects.create_user(email="tarjeta@familia.com", password="password123")
+        cat_tarjeta = Categoria.objects.create(nombre="Tarjetas de Crédito", tipo=Categoria.Tipo.GASTO)
+        elem_visa = Elemento.objects.create(categoria=cat_tarjeta, nombre="Tarjeta Visa Oro")
+        Elemento.objects.create(categoria=cat_tarjeta, nombre="Tarjeta Mastercard")
+
+        cat_casa = Categoria.objects.create(nombre="Gastos Casa", tipo=Categoria.Tipo.GASTO)
+        elem_luz = Elemento.objects.create(categoria=cat_casa, nombre="Electricidad")
+
+        client = Client()
+        client.force_login(carlos)
+
+        # El desplegable de elementos solo ofrece los de la categoría de tarjetas
+        response = client.get(reverse("finanzas:gasto_create"), {"categoria": cat_tarjeta.id})
+        self.assertEqual(response.status_code, 200)
+        form = response.context["form"]
+        self.assertEqual(
+            list(form.fields["elemento"].queryset.values_list("nombre", flat=True)),
+            ["Tarjeta Mastercard", "Tarjeta Visa Oro"],
+        )
+
+        # El concepto se autogenera: liquidación del mes anterior (se paga el día 1 del mes siguiente)
+        response = client.post(
+            reverse("finanzas:gasto_create"),
+            {
+                "categoria": cat_tarjeta.id,
+                "elemento": elem_visa.id,
+                "monto": "510.00",
+                "fecha": date(2026, 3, 1).isoformat(),
+                "es_fijo": "",
+                "notas": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        gasto = Gasto.objects.get(elemento=elem_visa)
+        self.assertEqual(gasto.concepto, "Liquidación Tarjetas de Crédito (02/2026)")
+        self.assertEqual(gasto.monto, Decimal("510.00"))
+
+        # En el resto de categorías el concepto sigue siendo obligatorio
+        response = client.post(
+            reverse("finanzas:gasto_create"),
+            {
+                "categoria": cat_casa.id,
+                "elemento": elem_luz.id,
+                "monto": "50.00",
+                "fecha": date.today().isoformat(),
+                "es_fijo": "",
+                "notas": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("concepto", response.context["form"].errors)
+
+    def test_gasto_elemento_fijo_concepto_y_recurrencia_automaticas(self) -> None:
+        """En un elemento recurrente no se pide concepto: se autogenera y el gasto queda marcado como fijo."""
+        from datetime import date
+
+        carlos = Usuario.objects.create_user(email="hipo@familia.com", password="password123")
+        cat = Categoria.objects.create(nombre="Gastos Casa", tipo=Categoria.Tipo.GASTO)
+        elem = Elemento.objects.create(categoria=cat, nombre="Hipoteca / Alquiler", es_fijo=True)
+
+        client = Client()
+        client.force_login(carlos)
+
+        response = client.post(
+            reverse("finanzas:gasto_create"),
+            {
+                "categoria": cat.id,
+                "elemento": elem.id,
+                "monto": "850.00",
+                "fecha": date(2026, 3, 15).isoformat(),
+                "concepto": "",
+                "es_fijo": "",
+                "notas": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        gasto = Gasto.objects.get(elemento=elem)
+        self.assertEqual(gasto.concepto, "Cuota Hipoteca / Alquiler (03/2026)")
+        self.assertTrue(gasto.es_fijo)
+
+    def test_gasto_elemento_fijo_marca_recurrente_automatico(self) -> None:
+        """Si el elemento ya es un compromiso fijo, el gasto se marca como recurrente sin preguntar."""
+        carlos = Usuario.objects.create_user(email="fin@familia.com", password="password123")
+        cat = Categoria.objects.create(nombre="Gastos Casa", tipo=Categoria.Tipo.GASTO)
+        hipoteca = Elemento.objects.create(categoria=cat, nombre="Hipoteca / Alquiler", es_fijo=True)
+        Elemento.objects.create(categoria=cat, nombre="Compra puntual", es_fijo=False)
+
+        client = Client()
+        client.force_login(carlos)
+
+        response = client.get(reverse("finanzas:gasto_create"), {"elemento": hipoteca.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["form"].fields["es_fijo"].initial)
+
+        # Un elemento no fijo no fuerza el check de recurrencia
+        no_fijo = Elemento.objects.get(nombre="Compra puntual")
+        response = client.get(reverse("finanzas:gasto_create"), {"elemento": no_fijo.id})
+        self.assertFalse(response.context["form"].fields["es_fijo"].initial)
+
+        # El mapa del desplegable dependiente informa si cada elemento es fijo
+        config = response.context["gasto_config"]["elementos_por_categoria"][str(cat.id)]
+        self.assertEqual(
+            {el["nombre"]: el["es_fijo"] for el in config},
+            {"Compra puntual": False, "Hipoteca / Alquiler": True},
+        )
+
+    def test_elemento_finalizado_se_excluye_del_formulario_de_gasto(self) -> None:
+        """Verifica que un elemento marcado como finalizado no se ofrezca para registrar nuevos gastos."""
+        from datetime import date
+
+        carlos = Usuario.objects.create_user(email="fin@familia.com", password="password123")
+        cat, _ = Categoria.objects.get_or_create(
+            nombre="Préstamos & Financiaciones",
+            tipo=Categoria.Tipo.GASTO,
+        )
+        Elemento.objects.create(
+            categoria=cat,
+            nombre="Hipoteca / Alquiler",
+            finalizado=True,
+            fecha_finalizacion=date(2026, 5, 1),
+        )
+        Elemento.objects.create(categoria=cat, nombre="Préstamo Coche")
+
+        client = Client()
+        client.force_login(carlos)
+
+        response = client.get(reverse("finanzas:gasto_create"), {"categoria": cat.id})
+        self.assertEqual(response.status_code, 200)
+        form = response.context["form"]
+        self.assertEqual(
+            list(form.fields["elemento"].queryset.values_list("nombre", flat=True)),
+            ["Préstamo Coche"],
+        )
+
+        # La hipoteca finalizada tampoco aparece en el mapa de elementos del desplegable dependiente
+        self.assertEqual(
+            [el["nombre"] for el in response.context["gasto_config"]["elementos_por_categoria"].get(str(cat.id), [])],
+            ["Préstamo Coche"],
+        )
 
 
 

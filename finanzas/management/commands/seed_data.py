@@ -128,7 +128,6 @@ class Command(BaseCommand):
                 "#015F78",
                 "Compromisos y suministros de la vivienda habitual",
                 [
-                    ("Hipoteca / Alquiler", True, "home", "Cuota hipotecaria mensual"),
                     ("Electricidad", False, "zap", "Factura de luz Iberdrola / Endesa"),
                     ("Agua", False, "droplet", "Suministro de agua Canal Isabel II"),
                     ("Comunidad Propietarios", True, "building-2", "Cuota ordinaria de la comunidad de vecinos"),
@@ -138,12 +137,21 @@ class Command(BaseCommand):
                 ],
             ),
             (
+                "Préstamos & Financiaciones",
+                "landmark",
+                "#8B5CF6",
+                "Cuotas de préstamos y financiaciones pagadas por domiciliación o transferencia",
+                [
+                    ("Hipoteca / Alquiler", True, "landmark", "Cuota hipotecaria mensual (se marca como finalizada al terminar de pagar)"),
+                ],
+            ),
+            (
                 "Coches & Movilidad",
                 "car",
                 "#42D3F2",
                 "Vehículos familiares, repostajes y desplazamientos",
                 [
-                    ("Préstamo Coche", True, "car", "Financiación bancaria vehículo"),
+                    ("Renting Coche", True, "car", "Renting con opción de compra o cambio de vehículo"),
                     ("Combustible / Gasolina", False, "fuel", "Repsol / Cepsa repostajes"),
                     ("Mantenimiento & Taller", False, "wrench", "Revisiones anuales, aceite y neumáticos"),
                     ("ITV & Impuestos", True, "file-text", "Impuesto municipal e ITV"),
@@ -286,10 +294,10 @@ class Command(BaseCommand):
                 gastos_fijos_mensuales = [
                     ("Tarjetas de Crédito > Tarjeta Visa Oro", "Liquidación Mensual Visa Oro", Decimal("510.00"), 1, titular1, False),
                     ("Tarjetas de Crédito > Tarjeta Mastercard", "Liquidación Mensual Mastercard", Decimal("340.00"), 1, titular2, False),
-                    ("Gastos Casa > Hipoteca / Alquiler", "Cuota Hipoteca BBVA", Decimal("780.00"), 1, titular1, True),
+                    ("Préstamos & Financiaciones > Hipoteca / Alquiler", "Cuota Hipoteca BBVA", Decimal("780.00"), 1, titular1, True),
                     ("Gastos Casa > Comunidad Propietarios", "Recibo Comunidad Propietarios", Decimal("85.00"), 5, titular1, True),
                     ("Gastos Casa > Movistar / Fibra & Móvil", "Factura Movistar Fusión", Decimal("95.00"), 10, titular1, True),
-                    ("Coches & Movilidad > Préstamo Coche", "Letra Préstamo Vehículo Santander", Decimal("220.00"), 5, titular1, True),
+                    ("Coches & Movilidad > Renting Coche", "Cuota Renting Vehículo", Decimal("220.00"), 5, titular1, True),
                     ("Seguros > Seguro Salud Familiar", "Cuota Médica Familiar Adeslas", Decimal("135.00"), 1, titular2, True),
                     ("Ocio & Familia > Suscripciones Digitales", "Netflix + Spotify Familiar", Decimal("27.99"), 15, titular2, True),
                 ]

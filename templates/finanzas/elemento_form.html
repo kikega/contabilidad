@@ -68,6 +68,20 @@
         </label>
       </div>
 
+      <div class="flex items-center space-x-2.5 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800">
+        {{ form.finalizado }}
+        <label for="id_finalizado" class="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+          ¿Compromiso finalizado / pagado? (ej: hipoteca liquidada, préstamo terminado)
+        </label>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+          Fecha de Finalización (Opcional)
+        </label>
+        {{ form.fecha_finalizacion }}
+      </div>
+
       <div>
         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
           Descripción u Observaciones

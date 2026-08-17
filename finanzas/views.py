@@ -98,7 +98,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         kpis = FinanzasService.calcular_kpis(fecha_inicio, fecha_fin)
         graficos_data = FinanzasService.get_datos_graficos_anuales(anio_actual)
-        movimientos_recientes = FinanzasService.get_movimientos_recientes(limite=8)
+        comparativa_anual = FinanzasService.get_comparativa_anual()
 
         meses_lista = [
             (1, "Enero"), (2, "Febrero"), (3, "Marzo"), (4, "Abril"),
@@ -109,7 +109,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context.update({
             "kpis": kpis,
             "graficos_data": graficos_data,
-            "movimientos_recientes": movimientos_recientes,
+            "comparativa_anual": comparativa_anual,
             "anio_actual": anio_actual,
             "mes_actual": mes_actual,
             "anios_disponibles": anios_disponibles,
@@ -407,7 +407,29 @@ class IngresoDeleteView(LoginRequiredMixin, DeleteView):
 # CRUD GASTOS
 # ==============================================================================
 
-class GastoCreateView(LoginRequiredMixin, CreateView):
+class GastoFormContextMixin:
+    """Expone el mapa categoría->elementos y las categorías de tarjetas para el desplegable dependiente."""
+
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        categorias = list(FinanzasService.get_categorias_gasto_queryset())
+        elementos_por_categoria: Dict[str, list] = {}
+        for elem in (
+            Elemento.objects.filter(categoria__tipo=Categoria.Tipo.GASTO, finalizado=False)
+            .select_related("categoria")
+            .order_by("categoria__nombre", "nombre")
+        ):
+            elementos_por_categoria.setdefault(str(elem.categoria_id), []).append(
+                {"id": elem.id, "nombre": elem.nombre, "es_fijo": elem.es_fijo}
+            )
+        context["gasto_config"] = {
+            "elementos_por_categoria": elementos_por_categoria,
+            "categorias_tarjeta": [c.id for c in categorias if "tarjeta" in c.nombre.lower()],
+        }
+        return context
+
+
+class GastoCreateView(LoginRequiredMixin, GastoFormContextMixin, CreateView):
     """Registro de un nuevo gasto."""
 
     model = Gasto
@@ -419,8 +441,13 @@ class GastoCreateView(LoginRequiredMixin, CreateView):
         initial = super().get_initial()
         elem_id = self.request.GET.get("elemento")
         cat_id = self.request.GET.get("categoria")
+        if cat_id:
+            initial["categoria"] = cat_id
         if elem_id:
-            initial["elemento"] = elem_id
+            elem = Elemento.objects.select_related("categoria").filter(id=elem_id).first()
+            if elem:
+                initial["elemento"] = elem.id
+                initial["categoria"] = elem.categoria_id
         elif cat_id:
             elem = Elemento.objects.filter(categoria_id=cat_id).first()
             if elem:
@@ -440,13 +467,19 @@ class GastoCreateView(LoginRequiredMixin, CreateView):
         return response
 
 
-class GastoUpdateView(LoginRequiredMixin, UpdateView):
+class GastoUpdateView(LoginRequiredMixin, GastoFormContextMixin, UpdateView):
     """Edición de un gasto."""
 
     model = Gasto
     form_class = GastoForm
     template_name = "finanzas/gasto_form.html"
     success_url = reverse_lazy("finanzas:cuentas")
+
+    def get_initial(self) -> Dict[str, Any]:
+        initial = super().get_initial()
+        if self.object and self.object.elemento_id:
+            initial["categoria"] = self.object.elemento.categoria_id
+        return initial
 
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
@@ -667,26 +700,6 @@ class AhorrosListView(LoginRequiredMixin, TemplateView):
         context["form_cuenta"] = CuentaAhorroForm()
         context["graficos"] = resumen_ahorros["graficos"]
         return context
-
-
-class MatrizAhorrosHtmxView(LoginRequiredMixin, View):
-    """Carga dinámica con HTMX de la matriz de ahorro al cambiar de año."""
-
-    def get(self, request: HttpRequest) -> HttpResponse:
-        hoy = timezone.now().date()
-        anio = _int_param(request.GET.get("anio"), hoy.year) or hoy.year
-
-        resumen_ahorros = FinanzasService.get_resumen_ahorros_anual(anio=anio)
-        response = render(
-            request,
-            "finanzas/partials/matriz_ahorros.html",
-            {
-                "resumen": resumen_ahorros,
-                "anio_actual": anio,
-            },
-        )
-        response["HX-Trigger"] = json.dumps({"actualizarGraficos": resumen_ahorros["graficos"]})
-        return response
 
 
 class GuardarSaldoMensualHtmxView(LoginRequiredMixin, View):

@@ -1,71 +1,94 @@
-<!-- Matriz Anual de Cuentas de Ahorro y Saldos Mensuales -->
+<!-- Matriz Anual de Cuentas de Ahorro y Saldos Mensuales (meses como filas, cuentas como columnas) -->
 <div class="overflow-x-auto scrollbar-thin">
-  <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
-    
-    <!-- Encabezado con los 12 meses -->
+  <table class="w-full text-left text-xs">
+
+    <!-- Cabecera: una columna por cuenta con sus métricas y acciones -->
     <thead class="bg-slate-50/75 dark:bg-slate-800/50 text-slate-400 font-semibold uppercase tracking-wider">
       <tr>
-        <th class="px-4 py-3.5 sticky left-0 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm min-w-[220px]">
-          Cuenta / Fondo de Ahorro
+        <th class="px-4 py-3.5 sticky left-0 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm min-w-[120px]">
+          Mes
         </th>
-        {% for abrev in resumen.meses_abrev %}
-        <th class="px-3 py-3.5 text-right min-w-[110px]">
-          {{ abrev }}
-        </th>
-        {% endfor %}
-        <th class="px-4 py-3.5 text-right min-w-[125px] bg-slate-100/50 dark:bg-slate-800/80 font-bold text-slate-700 dark:text-slate-200">
-          Saldo Actual
-        </th>
-        <th class="px-4 py-3.5 text-right min-w-[130px] font-bold text-slate-700 dark:text-slate-200">
-          Variación Anual
-        </th>
-        <th class="px-3 py-3.5 text-center w-16">
-          Acciones
-        </th>
-      </tr>
-    </thead>
-
-    <!-- Filas por cada Cuenta de Ahorro -->
-    <tbody class="divide-y divide-slate-200/60 dark:divide-slate-800/60 bg-white dark:bg-slate-900 font-medium">
-      {% for fila in resumen.filas_cuentas %}
-      <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
-        
-        <!-- Nombre de la cuenta e icono (Sticky Left) -->
-        <td class="px-4 py-3 whitespace-nowrap sticky left-0 z-10 bg-white/95 dark:bg-slate-900/95 group-hover:bg-slate-50/95 dark:group-hover:bg-slate-800/95 border-r border-slate-200/60 dark:border-slate-800/60">
-          <div class="flex items-center space-x-3">
+        {% for fila in resumen.filas_cuentas %}
+        <th class="px-3 py-3.5 min-w-[170px] align-top">
+          <div class="flex items-center space-x-2.5">
             <span class="w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-xs shrink-0" style="background-color: {{ fila.cuenta.color }};">
               <i data-lucide="{{ fila.cuenta.icono|default:'piggy-bank' }}" class="w-4 h-4"></i>
             </span>
-            <div class="min-w-0">
+            <div class="min-w-0 text-left">
               <div class="font-bold text-slate-900 dark:text-white text-xs truncate">{{ fila.cuenta.nombre }}</div>
-              <div class="text-[11px] text-slate-400 flex items-center space-x-1">
+              <div class="text-[10px] text-slate-400 font-normal normal-case flex items-center space-x-1">
                 <span>{{ fila.cuenta.entidad }}</span>
                 <span>&bull;</span>
                 <span class="text-cyan-600 dark:text-cyan-400">{{ fila.cuenta.get_tipo_display }}</span>
               </div>
             </div>
+            <div class="ml-auto flex items-center space-x-1">
+              <a href="{% url 'finanzas:cuenta_ahorro_update' fila.cuenta.id %}" title="Editar configuración de cuenta" class="p-1 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              </a>
+              <a href="{% url 'finanzas:cuenta_ahorro_delete' fila.cuenta.id %}" title="Eliminar cuenta" class="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </a>
+            </div>
           </div>
+          <div class="mt-2 flex items-center justify-between gap-2">
+            {% if fila.ultimo_saldo_anio is not None %}
+              {% if fila.variacion_importe > 0 %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                <i data-lucide="trending-up" class="w-3 h-3 mr-1"></i> +{{ fila.variacion_importe }} € (+{{ fila.variacion_porcentaje }}%)
+              </span>
+              {% elif fila.variacion_importe < 0 %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                <i data-lucide="trending-down" class="w-3 h-3 mr-1"></i> {{ fila.variacion_importe }} € ({{ fila.variacion_porcentaje }}%)
+              </span>
+              {% else %}
+              <span class="text-slate-400 text-[10px] font-medium">0.00 € (0%)</span>
+              {% endif %}
+            {% else %}
+            <span class="text-slate-300 dark:text-slate-600 text-[10px]">—</span>
+            {% endif %}
+            {% if fila.cuenta.objetivo_monto %}
+            <span class="text-[10px] font-semibold text-slate-400" title="Objetivo de la cuenta">
+              Meta: {{ fila.cuenta.objetivo_monto|floatformat:0 }} €
+            </span>
+            {% endif %}
+          </div>
+        </th>
+        {% endfor %}
+        <th class="px-3 py-3.5 min-w-[135px] align-top bg-slate-100/50 dark:bg-slate-800/80">
+          <div class="font-bold text-slate-700 dark:text-slate-200">Total Ahorro Acumulado</div>
+          <div class="text-[10px] font-normal normal-case text-slate-400 mt-1">Consolidado de todas las cuentas</div>
+        </th>
+      </tr>
+    </thead>
+
+    <!-- Cuerpo: una fila por mes, una casilla clickable por cuenta -->
+    <tbody class="divide-y divide-slate-200/60 dark:divide-slate-800/60 bg-white dark:bg-slate-900 font-medium">
+      {% for row in resumen.matriz_por_mes %}
+      <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors group">
+        <td class="px-4 py-2.5 sticky left-0 z-10 bg-white/95 dark:bg-slate-900/95 group-hover:bg-slate-50/95 dark:group-hover:bg-slate-800/95 border-r border-slate-200/60 dark:border-slate-800/60 whitespace-nowrap">
+          <div class="font-bold text-slate-900 dark:text-white">{{ row.nombre }}</div>
+          <div class="text-[10px] text-slate-400">{{ row.abrev }}</div>
         </td>
 
-        <!-- Celdas de los 12 meses: Limpias y Clickables -->
-        {% for m in fila.meses %}
+        {% for celda in row.cuentas %}
         <td class="px-2 py-2 text-right whitespace-nowrap">
-          {% if m.saldo is not None %}
-          <button 
+          {% if celda.saldo is not None %}
+          <button
             type="button"
-            onclick="abrirModalSaldo('{{ fila.cuenta.id }}', '{{ resumen.anio }}', '{{ m.mes }}', '{{ m.saldo }}', '{{ m.notas|escapejs }}')"
+            onclick="abrirModalSaldo('{{ celda.cuenta_id }}', '{{ resumen.anio }}', '{{ celda.mes }}', '{{ celda.saldo }}', '{{ celda.notas|escapejs }}')"
             class="group/btn w-full text-right px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-cyan-50 dark:hover:bg-cyan-950/60 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-200 dark:hover:border-cyan-800 border border-transparent transition-all inline-flex items-center justify-end space-x-1 cursor-pointer"
-            title="{{ fila.cuenta.nombre }} ({{ m.mes }}/{{ resumen.anio }}): {{ m.saldo|floatformat:2 }} €{% if m.notas %} - {{ m.notas }}{% endif %}"
+            title="{{ row.nombre }} {{ resumen.anio }}: {{ celda.saldo|floatformat:2 }} €{% if celda.notas %} - {{ celda.notas }}{% endif %}"
           >
-            <span>{{ m.saldo|floatformat:2 }} €</span>
+            <span>{{ celda.saldo|floatformat:2 }} €</span>
             <i data-lucide="pencil" class="w-2.5 h-2.5 opacity-0 group-hover/btn:opacity-100 text-cyan-500 transition-opacity shrink-0"></i>
           </button>
           {% else %}
-          <button 
+          <button
             type="button"
-            onclick="abrirModalSaldo('{{ fila.cuenta.id }}', '{{ resumen.anio }}', '{{ m.mes }}', '', '')"
+            onclick="abrirModalSaldo('{{ celda.cuenta_id }}', '{{ resumen.anio }}', '{{ celda.mes }}', '', '')"
             class="w-full text-right px-2.5 py-1.5 rounded-xl text-xs text-slate-300 dark:text-slate-600 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
-            title="Añadir saldo de {{ m.mes }}/{{ resumen.anio }} para {{ fila.cuenta.nombre }}"
+            title="Añadir saldo de {{ row.nombre }} {{ resumen.anio }}"
           >
             —
           </button>
@@ -73,48 +96,22 @@
         </td>
         {% endfor %}
 
-        <!-- Saldo Actual Consolidado -->
-        <td class="px-4 py-3 text-right whitespace-nowrap bg-slate-50/50 dark:bg-slate-800/30 font-black text-slate-900 dark:text-white text-xs">
-          {{ fila.saldo_actual|floatformat:2 }} €
-          {% if fila.cuenta.objetivo_monto %}
-          <span class="block text-[10px] font-normal text-slate-400">
-            Meta: {{ fila.cuenta.objetivo_monto|floatformat:0 }} €
-          </span>
+        <td class="px-3 py-2.5 text-right whitespace-nowrap">
+          {% if row.total is not None %}
+          <div class="font-black text-slate-900 dark:text-white text-xs">{{ row.total|floatformat:2 }} €</div>
+          {% if row.variacion_mes != 0 %}
+          <div class="text-[10px] font-semibold {% if row.variacion_mes > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
+            {% if row.variacion_mes > 0 %}+{% endif %}{{ row.variacion_mes|floatformat:2 }} €
+          </div>
           {% endif %}
-        </td>
-
-        <!-- Variación Anual de la cuenta -->
-        <td class="px-4 py-3 text-right whitespace-nowrap">
-          {% if fila.ultimo_saldo_anio is not None %}
-            {% if fila.variacion_importe > 0 %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-              <i data-lucide="trending-up" class="w-3 h-3 mr-1"></i> +{{ fila.variacion_importe }} € (+{{ fila.variacion_porcentaje }}%)
-            </span>
-            {% elif fila.variacion_importe < 0 %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
-              <i data-lucide="trending-down" class="w-3 h-3 mr-1"></i> {{ fila.variacion_importe }} € ({{ fila.variacion_porcentaje }}%)
-            </span>
-            {% else %}
-            <span class="text-slate-400 text-xs font-medium">0.00 € (0%)</span>
-            {% endif %}
           {% else %}
-          <span class="text-slate-300 dark:text-slate-600 text-xs">—</span>
+          <span class="text-slate-400 font-normal">—</span>
           {% endif %}
-        </td>
-
-        <!-- Acciones: Editar / Eliminar cuenta -->
-        <td class="px-3 py-3 text-center whitespace-nowrap space-x-1">
-          <a href="{% url 'finanzas:cuenta_ahorro_update' fila.cuenta.id %}" title="Editar configuración de cuenta" class="p-1 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
-            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-          </a>
-          <a href="{% url 'finanzas:cuenta_ahorro_delete' fila.cuenta.id %}" title="Eliminar cuenta" class="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">
-            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-          </a>
         </td>
       </tr>
       {% empty %}
       <tr>
-        <td colspan="16" class="px-6 py-12 text-center text-slate-400">
+        <td colspan="{{ resumen.filas_cuentas|length|add:2 }}" class="px-6 py-12 text-center text-slate-400">
           <div class="flex flex-col items-center justify-center">
             <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
               <i data-lucide="piggy-bank" class="w-6 h-6"></i>
@@ -127,39 +124,33 @@
       {% endfor %}
     </tbody>
 
-    <!-- Fila de TOTALES MENSUALES (Footer de la tabla) -->
+    <!-- Pie: Saldo actual de cada cuenta y crecimiento anual consolidado -->
     {% if resumen.filas_cuentas %}
     <tfoot class="bg-slate-100/90 dark:bg-slate-800/90 border-t-2 border-slate-300 dark:border-slate-700 font-bold text-xs">
       <tr>
-        <td class="px-4 py-3.5 sticky left-0 z-10 bg-slate-100/95 dark:bg-slate-800/95 border-r border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white uppercase tracking-wider flex items-center">
-          <i data-lucide="calculator" class="w-4 h-4 mr-1.5 text-cyan-600 dark:text-cyan-400"></i>
-          Total Ahorro Acumulado
+        <td class="px-4 py-3.5 sticky left-0 z-10 bg-slate-100/95 dark:bg-slate-800/95 border-r border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white uppercase tracking-wider">
+          <i data-lucide="wallet" class="w-4 h-4 mr-1.5 inline-block text-cyan-600 dark:text-cyan-400"></i>
+          Saldo Actual
         </td>
-
-        {% for t in resumen.totales_meses %}
+        {% for fila in resumen.filas_cuentas %}
         <td class="px-3 py-3.5 text-right whitespace-nowrap">
-          {% if t.total is not None %}
-          <div class="font-black text-slate-900 dark:text-white text-xs">
-            {{ t.total|floatformat:2 }} €
-          </div>
-          {% if t.variacion_mes != 0 %}
-          <div class="text-[10px] font-semibold {% if t.variacion_mes > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
-            {% if t.variacion_mes > 0 %}+{% endif %}{{ t.variacion_mes|floatformat:2 }} €
-          </div>
-          {% endif %}
-          {% else %}
-          <span class="text-slate-400 font-normal">—</span>
+          <div class="font-black text-slate-900 dark:text-white">{{ fila.saldo_actual|floatformat:2 }} €</div>
+          {% if fila.cuenta.objetivo_monto %}
+          <div class="text-[10px] font-normal text-slate-400">Meta: {{ fila.cuenta.objetivo_monto|floatformat:0 }} €</div>
           {% endif %}
         </td>
         {% endfor %}
-
-        <!-- Total Saldo Actual -->
-        <td class="px-4 py-3.5 text-right whitespace-nowrap bg-cyan-50/50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 font-black text-sm">
+        <td class="px-3 py-3.5 text-right whitespace-nowrap bg-cyan-50/50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 font-black">
           {{ resumen.kpis.total_ahorro_actual|floatformat:2 }} €
         </td>
-
-        <!-- Crecimiento Anual Total -->
-        <td class="px-4 py-3.5 text-right whitespace-nowrap">
+      </tr>
+      <tr>
+        <td class="px-4 py-3.5 sticky left-0 z-10 bg-slate-100/95 dark:bg-slate-800/95 border-r border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white uppercase tracking-wider">
+          <i data-lucide="trending-up" class="w-4 h-4 mr-1.5 inline-block text-emerald-500"></i>
+          Crecimiento Anual
+        </td>
+        <td colspan="{{ resumen.filas_cuentas|length }}" class="px-3 py-3.5"></td>
+        <td class="px-3 py-3.5 text-right whitespace-nowrap">
           {% if resumen.kpis.crecimiento_anio_importe > 0 %}
           <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
             +{{ resumen.kpis.crecimiento_anio_importe }} € (+{{ resumen.kpis.crecimiento_anio_porcentaje }}%)
@@ -172,8 +163,6 @@
           <span class="text-slate-400 text-xs font-medium">0.00 € (0%)</span>
           {% endif %}
         </td>
-
-        <td class="px-3 py-3.5"></td>
       </tr>
     </tfoot>
     {% endif %}

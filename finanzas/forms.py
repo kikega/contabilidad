@@ -1,8 +1,10 @@
 """Formularios para el registro y filtrado de movimientos financieros."""
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, Dict
 from django import forms
+from django.db.models import Q
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from finanzas.models import Categoria, Elemento, Gasto, Ingreso
@@ -52,13 +54,17 @@ class ElementoForm(forms.ModelForm):
 
     class Meta:
         model = Elemento
-        fields = ["categoria", "nombre", "es_fijo", "icono", "descripcion"]
+        fields = ["categoria", "nombre", "es_fijo", "finalizado", "fecha_finalizacion", "icono", "descripcion"]
         widgets = {
             "categoria": forms.Select(attrs={"class": SELECT_CLASSES}),
             "nombre": forms.TextInput(
                 attrs={"class": INPUT_CLASSES, "placeholder": "Ej: Electricidad, Agua, Comunidad propietarios, Gasolina..."}
             ),
             "es_fijo": forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
+            "finalizado": forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
+            "fecha_finalizacion": forms.DateInput(
+                attrs={"class": INPUT_CLASSES, "type": "date", "placeholder": "Fecha en la que se terminó de pagar"}
+            ),
             "icono": forms.TextInput(
                 attrs={"class": INPUT_CLASSES, "placeholder": "Opcional (hereda de categoría si está vacío)"}
             ),
@@ -119,18 +125,34 @@ class IngresoForm(forms.ModelForm):
 
 
 class GastoForm(forms.ModelForm):
-    """Formulario para el registro de gastos periódicos vinculados a un elemento."""
+    """Formulario para el registro de gastos periódicos vinculados a un elemento.
+
+    Incluye un selector de categoría que filtra los elementos disponibles y, en la
+    categoría de tarjetas, el concepto se genera automáticamente (liquidación del
+    mes anterior que se paga el día 1 del mes siguiente).
+    """
+
+    categoria = forms.ModelChoiceField(
+        label=_("Categoría de gasto"),
+        queryset=Categoria.objects.none(),
+        widget=forms.Select(attrs={"class": SELECT_CLASSES}),
+    )
+    concepto = forms.CharField(
+        label=_("Concepto del apunte"),
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "class": INPUT_CLASSES,
+                "placeholder": "Ej: Factura luz Iberdrola, Cuota comunidad T1, Gasolina viaje...",
+            }
+        ),
+    )
 
     class Meta:
         model = Gasto
-        fields = ["concepto", "elemento", "monto", "fecha", "es_fijo", "notas"]
+        fields = ["categoria", "concepto", "elemento", "monto", "fecha", "es_fijo", "notas"]
         widgets = {
-            "concepto": forms.TextInput(
-                attrs={
-                    "class": INPUT_CLASSES,
-                    "placeholder": "Ej: Factura luz Iberdrola, Cuota comunidad T1, Gasolina viaje...",
-                }
-            ),
             "elemento": forms.Select(attrs={"class": SELECT_CLASSES}),
             "monto": forms.NumberInput(
                 attrs={
@@ -158,9 +180,64 @@ class GastoForm(forms.ModelForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.fields["elemento"].queryset = Elemento.objects.filter(
-            categoria__tipo=Categoria.Tipo.GASTO
-        ).select_related("categoria").order_by("categoria__nombre", "nombre")
+        from finanzas.services import FinanzasService
+
+        self.fields["categoria"].queryset = FinanzasService.get_categorias_gasto_queryset()
+
+        cat_id = self.data.get("categoria") if self.data else None
+        if cat_id is None:
+            cat_id = self.initial.get("categoria")
+
+        # Los elementos finalizados no deben poder usarse para nuevos gastos,
+        # salvo el elemento ya asociado cuando se edita un gasto existente.
+        ids_extra: list = []
+        if self.instance and self.instance.pk and self.instance.elemento_id:
+            ids_extra = [self.instance.elemento_id]
+
+        qs = Elemento.objects.filter(
+            Q(categoria__tipo=Categoria.Tipo.GASTO) & (Q(finalizado=False) | Q(pk__in=ids_extra))
+        ).select_related("categoria")
+        if cat_id:
+            qs = qs.filter(categoria_id=cat_id)
+        self.fields["elemento"].queryset = qs.order_by("categoria__nombre", "nombre")
+
+        # Si el elemento seleccionado ya es un compromiso recurrente (es_fijo),
+        # el gasto se marca como fijo automáticamente: no hace falta preguntarlo.
+        if not (self.instance and self.instance.pk):
+            elem_id = self.data.get("elemento") if self.data else None
+            if not elem_id:
+                elem_id = self.initial.get("elemento")
+                if hasattr(elem_id, "pk"):
+                    elem_id = elem_id.pk
+            if elem_id and Elemento.objects.filter(id=elem_id, es_fijo=True).exists():
+                self.fields["es_fijo"].initial = True
+
+    def clean(self) -> Dict[str, Any]:
+        cleaned = super().clean()
+        concepto = (cleaned.get("concepto") or "").strip()
+        categoria = cleaned.get("categoria")
+        elemento = cleaned.get("elemento")
+        es_tarjeta = bool(categoria and "tarjeta" in categoria.nombre.lower())
+        es_recurrente = bool(elemento and elemento.es_fijo)
+
+        # La recurrencia la define el elemento: si es un compromiso fijo, el gasto lo es también
+        if es_recurrente:
+            cleaned["es_fijo"] = True
+
+        if not concepto:
+            fecha = cleaned.get("fecha") or timezone.now().date()
+            anio, mes = fecha.year, fecha.month
+            if es_tarjeta:
+                if fecha.day == 1:
+                    mes -= 1
+                    if mes == 0:
+                        mes, anio = 12, anio - 1
+                cleaned["concepto"] = f"Liquidación {categoria.nombre} ({mes:02d}/{anio})"
+            elif es_recurrente:
+                cleaned["concepto"] = f"Cuota {elemento.nombre} ({mes:02d}/{anio})"
+            else:
+                self.add_error("concepto", _("Indica un concepto para el gasto."))
+        return cleaned
 
 
 class FiltroFinanzasForm(forms.Form):
