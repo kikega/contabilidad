@@ -4,8 +4,9 @@ import random
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
@@ -14,7 +15,6 @@ from finanzas.models import (
     CuentaAhorro,
     Elemento,
     Gasto,
-    GastoEspecialTarjeta,
     Ingreso,
     RegistroSaldoMensual,
 )
@@ -28,8 +28,19 @@ class Command(BaseCommand):
 
     help = "Genera datos de prueba completos con la jerarquía Categoría -> Elementos -> Apuntes."
 
+    def add_arguments(self, parser: Any) -> None:
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Permite ejecutar aunque DEBUG esté desactivado (útil para la suite de tests).",
+        )
+
     @transaction.atomic
     def handle(self, *args: Any, **options: Any) -> None:
+        if not settings.DEBUG and not options["force"]:
+            raise CommandError(
+                "seed_data crea usuarios con contraseñas conocidas y solo puede ejecutarse en desarrollo (DEBUG=True)."
+            )
         self.stdout.write(self.style.WARNING("🌱 Iniciando generación de datos de prueba..."))
 
         # 1. Crear Usuarios
@@ -101,6 +112,16 @@ class Command(BaseCommand):
 
         # Gastos
         categorias_gasto_defs = [
+            (
+                "Tarjetas de Crédito",
+                "credit-card",
+                "#F59E0B",
+                "Liquidaciones y cargos mensuales de tarjetas",
+                [
+                    ("Tarjeta Visa Oro", False, "credit-card", "Liquidación mensual Visa Oro"),
+                    ("Tarjeta Mastercard", False, "credit-card", "Liquidación mensual Mastercard Familiar"),
+                ],
+            ),
             (
                 "Gastos Casa",
                 "home",
@@ -263,6 +284,8 @@ class Command(BaseCommand):
 
                 # GASTOS FIJOS Y VARIABLES
                 gastos_fijos_mensuales = [
+                    ("Tarjetas de Crédito > Tarjeta Visa Oro", "Liquidación Mensual Visa Oro", Decimal("510.00"), 1, titular1, False),
+                    ("Tarjetas de Crédito > Tarjeta Mastercard", "Liquidación Mensual Mastercard", Decimal("340.00"), 1, titular2, False),
                     ("Gastos Casa > Hipoteca / Alquiler", "Cuota Hipoteca BBVA", Decimal("780.00"), 1, titular1, True),
                     ("Gastos Casa > Comunidad Propietarios", "Recibo Comunidad Propietarios", Decimal("85.00"), 5, titular1, True),
                     ("Gastos Casa > Movistar / Fibra & Móvil", "Factura Movistar Fusión", Decimal("95.00"), 10, titular1, True),
@@ -345,30 +368,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("✓ Flujo completo de Ingresos y Gastos generado para 2025 y 2026."))
 
-        # 4. Desgloses Especiales de Tarjetas de Crédito
-        compras_tarjeta = [
-            (titular1, "Visa Oro Carlos", GastoEspecialTarjeta.TipoComercio.SUPERMERCADO, "Mercadona Las Rozas", Decimal("134.50"), date(2026, 1, 10)),
-            (titular1, "Visa Oro Carlos", GastoEspecialTarjeta.TipoComercio.GASOLINA, "Estación Repsol M-40", Decimal("72.80"), date(2026, 1, 14)),
-            (titular1, "Visa Oro Carlos", GastoEspecialTarjeta.TipoComercio.RESTAURANTE_OCIO, "Restaurante La Tagliatella", Decimal("68.00"), date(2026, 1, 20)),
-            (titular2, "Mastercard Familiar Elena", GastoEspecialTarjeta.TipoComercio.SUPERMERCADO, "Carrefour Majadahonda", Decimal("148.20"), date(2026, 1, 17)),
-            (titular2, "Mastercard Familiar Elena", GastoEspecialTarjeta.TipoComercio.COMPRAS_ONLINE, "Amazon Prime Compras Hogar", Decimal("54.99"), date(2026, 1, 22)),
-            (titular2, "Mastercard Familiar Elena", GastoEspecialTarjeta.TipoComercio.FARMACIA_SALUD, "Farmacia Central", Decimal("28.40"), date(2026, 1, 25)),
-            (titular1, "Visa Oro Carlos", GastoEspecialTarjeta.TipoComercio.SUPERMERCADO, "Mercadona Las Rozas", Decimal("128.90"), date(2026, 2, 7)),
-            (titular1, "Visa Oro Carlos", GastoEspecialTarjeta.TipoComercio.GASOLINA, "Cepsa A-6", Decimal("65.00"), date(2026, 2, 11)),
-        ]
-
-        for usr, tarj, tip, com, mon, fec in compras_tarjeta:
-            GastoEspecialTarjeta.objects.get_or_create(
-                usuario=usr,
-                tarjeta=tarj,
-                comercio=com,
-                fecha=fec,
-                defaults={"tipo_comercio": tip, "monto": mon},
-            )
-
-        self.stdout.write(self.style.SUCCESS("✓ Compras especiales de tarjeta registradas."))
-
-        # 5. Pólizas de Seguros vinculadas a Finanzas (Elementos & Gastos)
+        # 4. Pólizas de Seguros vinculadas a Finanzas (Elementos & Gastos)
         seguro_auto_1, _ = Seguro.objects.get_or_create(
             numero_poliza="MAP-AUT-2024-8841",
             defaults={
@@ -523,7 +523,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("✓ Pólizas de seguros, elementos contables vinculados y gastos generados con éxito."))
 
-        # 6. Cuentas de Ahorro y Saldos Mensuales Consolidados
+        # 5. Cuentas de Ahorro y Saldos Mensuales Consolidados
         cuenta_emergencia, _ = CuentaAhorro.objects.get_or_create(
             nombre="Fondo de Emergencia Familiar",
             defaults={

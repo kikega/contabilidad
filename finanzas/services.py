@@ -1,9 +1,10 @@
 """Servicios y capa de lógica de negocio para cálculos financieros y agregaciones."""
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
-from django.db.models import DecimalField, F, Q, Sum
+from collections import defaultdict
+from django.db.models import Case, Count, DecimalField, IntegerField, Q, Sum, Value, When, QuerySet
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 
@@ -12,7 +13,6 @@ from finanzas.models import (
     CuentaAhorro,
     Elemento,
     Gasto,
-    GastoEspecialTarjeta,
     Ingreso,
     RegistroSaldoMensual,
 )
@@ -38,25 +38,42 @@ class FinanzasService:
 
         filtro_ing = Q()
         filtro_gas = Q()
-        filtro_tar = Q()
         filtro_aho = Q()
         if usuario_id:
             filtro_ing = Q(usuario_id=usuario_id)
             filtro_gas = Q(usuario_id=usuario_id)
-            filtro_tar = Q(usuario_id=usuario_id)
             filtro_aho = Q(cuenta__usuario_id=usuario_id)
 
         anios_ingresos = Ingreso.objects.filter(filtro_ing).dates("fecha", "year")
         anios_gastos = Gasto.objects.filter(filtro_gas).dates("fecha", "year")
-        anios_tarjetas = GastoEspecialTarjeta.objects.filter(filtro_tar).dates("fecha", "year")
         anios_ahorros = RegistroSaldoMensual.objects.filter(filtro_aho).values_list("anio", flat=True).distinct()
 
-        anios_set = {d.year for d in anios_ingresos} | {d.year for d in anios_gastos} | {d.year for d in anios_tarjetas} | set(anios_ahorros)
+        anios_set = {d.year for d in anios_ingresos} | {d.year for d in anios_gastos} | set(anios_ahorros)
 
         if not anios_set:
             anios_set.add(hoy.year)
 
         return sorted(list(anios_set))
+
+    @classmethod
+    def get_categorias_gasto_queryset(cls, elementos_prefetch=None) -> QuerySet[Categoria]:
+        """Obtiene el queryset de categorías de gasto ordenadas con prioridad:
+        1. Tarjetas (nombres con 'tarjeta')
+        2. Gastos Casa (nombres con 'gastos casa' o 'casa')
+        3. Resto de categorías por orden alfabético.
+        """
+        prioridad_orden = Case(
+            When(nombre__icontains="tarjeta", then=Value(1)),
+            When(Q(nombre__icontains="gastos casa") | Q(nombre__iexact="casa"), then=Value(2)),
+            default=Value(3),
+            output_field=IntegerField(),
+        )
+        return (
+            Categoria.objects.filter(tipo=Categoria.Tipo.GASTO)
+            .annotate(prioridad_orden=prioridad_orden)
+            .prefetch_related(elementos_prefetch or "elementos")
+            .order_by("prioridad_orden", "nombre")
+        )
 
     @staticmethod
     def get_periodo_fechas(
@@ -300,155 +317,77 @@ class FinanzasService:
         return movimientos[:limite]
 
     @classmethod
-    def get_resumen_cuentas_mensual(
-        cls,
-        anio: int,
-        mes: int,
-        usuario_id: Optional[int] = None
-    ) -> Dict[str, Any]:
-        """Genera el desglose contable mensual completo organizado en jerarquía: Categorías -> Elementos -> Apuntes."""
-        inicio = date(anio, mes, 1)
-        fin = date(anio + 1, 1, 1) if mes == 12 else date(anio, mes + 1, 1)
-
-        # Navegación mes anterior / siguiente
-        if mes == 1:
-            prev_mes, prev_anio = 12, anio - 1
-        else:
-            prev_mes, prev_anio = mes - 1, anio
-
-        if mes == 12:
-            next_mes, next_anio = 1, anio + 1
-        else:
-            next_mes, next_anio = mes + 1, anio
-
-        nombre_mes = cls.MESES_NOMBRES[mes - 1]
-
-        # 1. Ingresos jerárquicos
-        filtro_ing = Q(fecha__gte=inicio, fecha__lt=fin)
-        if usuario_id:
-            filtro_ing &= Q(usuario_id=usuario_id)
-
-        ingresos_qs = Ingreso.objects.filter(filtro_ing).select_related("elemento__categoria", "usuario").order_by("fecha")
-        categorias_ingreso_qs = (
-            Categoria.objects.filter(tipo=Categoria.Tipo.INGRESO)
-            .prefetch_related("elementos")
-            .order_by("nombre")
-        )
-
-        desglose_ingresos: List[Dict[str, Any]] = []
-        total_ingresos = Decimal("0.00")
-
-        for cat in categorias_ingreso_qs:
-            elementos_data = []
-            subtotal_cat = Decimal("0.00")
-
-            for elem in cat.elementos.all():
-                items = [ing for ing in ingresos_qs if ing.elemento_id == elem.id]
-                subtotal_elem = sum((item.monto for item in items), Decimal("0.00"))
-                subtotal_cat += subtotal_elem
-                total_ingresos += subtotal_elem
-
-                elementos_data.append({
-                    "elemento": elem,
-                    "items": items,
-                    "subtotal": subtotal_elem,
-                    "tiene_items": len(items) > 0,
-                })
-
-            desglose_ingresos.append({
-                "categoria": cat,
-                "elementos": elementos_data,
-                "subtotal": subtotal_cat,
-                "tiene_items": subtotal_cat > Decimal("0.00"),
-            })
-
-        # 2. Gastos jerárquicos
-        filtro_gas = Q(fecha__gte=inicio, fecha__lt=fin)
-        if usuario_id:
-            filtro_gas &= Q(usuario_id=usuario_id)
-
-        gastos_qs = Gasto.objects.filter(filtro_gas).select_related("elemento__categoria", "usuario").order_by("fecha")
-        categorias_gasto_qs = (
-            Categoria.objects.filter(tipo=Categoria.Tipo.GASTO)
-            .prefetch_related("elementos")
-            .order_by("nombre")
-        )
-
-        desglose_gastos: List[Dict[str, Any]] = []
-        total_gastos = Decimal("0.00")
-        total_fijos = Decimal("0.00")
-        total_variables = Decimal("0.00")
-
-        for cat in categorias_gasto_qs:
-            elementos_data = []
-            subtotal_cat = Decimal("0.00")
-
-            for elem in cat.elementos.all():
-                items = [gas for gas in gastos_qs if gas.elemento_id == elem.id]
-                subtotal_elem = sum((item.monto for item in items), Decimal("0.00"))
-                subtotal_cat += subtotal_elem
-                total_gastos += subtotal_elem
-
-                for it in items:
-                    if it.es_fijo or elem.es_fijo:
-                        total_fijos += it.monto
-                    else:
-                        total_variables += it.monto
-
-                elementos_data.append({
-                    "elemento": elem,
-                    "items": items,
-                    "subtotal": subtotal_elem,
-                    "tiene_items": len(items) > 0,
-                })
-
-            desglose_gastos.append({
-                "categoria": cat,
-                "elementos": elementos_data,
-                "subtotal": subtotal_cat,
-                "tiene_items": subtotal_cat > Decimal("0.00"),
-            })
-
-        balance_neto = total_ingresos - total_gastos
-        ratio_ahorro = (
-            ((balance_neto / total_ingresos) * Decimal("100.00")).quantize(Decimal("0.01"))
-            if total_ingresos > Decimal("0.00")
-            else Decimal("0.00")
-        )
-
-        return {
-            "anio": anio,
-            "mes": mes,
-            "nombre_mes": nombre_mes,
-            "prev_mes": prev_mes,
-            "prev_anio": prev_anio,
-            "next_mes": next_mes,
-            "next_anio": next_anio,
-            "desglose_ingresos": desglose_ingresos,
-            "desglose_gastos": desglose_gastos,
-            "total_ingresos": total_ingresos,
-            "total_gastos": total_gastos,
-            "total_fijos": total_fijos,
-            "total_variables": total_variables,
-            "balance_neto": balance_neto,
-            "ratio_ahorro": ratio_ahorro,
-        }
-
-    @classmethod
     def get_resumen_cuentas_anual(
         cls,
         anio: int,
         usuario_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Calcula la matriz completa anual (12 meses) de ingresos y gastos organizados por categorías y elementos."""
-        filtro_ing = Q(fecha__year=anio)
-        filtro_gas = Q(fecha__year=anio)
-        if usuario_id:
-            filtro_ing &= Q(usuario_id=usuario_id)
-            filtro_gas &= Q(usuario_id=usuario_id)
+        inicio_anio = date(anio, 1, 1)
+        fin_anio = date(anio + 1, 1, 1)
 
-        ingresos_qs = Ingreso.objects.filter(filtro_ing).select_related("elemento__categoria", "usuario").order_by("fecha")
-        gastos_qs = Gasto.objects.filter(filtro_gas).select_related("elemento__categoria", "usuario").order_by("fecha")
+        def _agregados_por_elemento_mes(modelo) -> Dict[int, Dict[int, Tuple[Decimal, int]]]:
+            """Agrupa en SQL los importes por elemento y mes: {elemento_id: {mes: (total, count)}}."""
+            qs = modelo.objects.filter(fecha__gte=inicio_anio, fecha__lt=fin_anio)
+            if usuario_id:
+                qs = qs.filter(usuario_id=usuario_id)
+            filas = (
+                qs.exclude(elemento_id__isnull=True)
+                .values("elemento_id")
+                .annotate(mes=TruncMonth("fecha"))
+                .values("elemento_id", "mes")
+                .annotate(total=Sum("monto"), count=Count("id"))
+            )
+            agregados: Dict[int, Dict[int, Tuple[Decimal, int]]] = {}
+            for fila in filas:
+                agregados.setdefault(fila["elemento_id"], {})[fila["mes"].month] = (
+                    fila["total"],
+                    fila["count"],
+                )
+            return agregados
+
+        def _construir_desglose(categorias_qs, agregados):
+            desglose = []
+            totales_mes = [Decimal("0.00")] * 12
+            total_anual = Decimal("0.00")
+
+            for cat in categorias_qs:
+                elementos_data = []
+                totales_mes_cat = [Decimal("0.00")] * 12
+                total_anual_cat = Decimal("0.00")
+
+                for elem in cat.elementos.all():
+                    meses_elem = []
+                    total_anual_elem = Decimal("0.00")
+                    por_mes = agregados.get(elem.id, {})
+
+                    for m in range(1, 13):
+                        total_m, count_m = por_mes.get(m, (Decimal("0.00"), 0))
+                        meses_elem.append({"mes": m, "total": total_m, "count": count_m})
+
+                        total_anual_elem += total_m
+                        totales_mes_cat[m - 1] += total_m
+                        totales_mes[m - 1] += total_m
+
+                    total_anual_cat += total_anual_elem
+                    total_anual += total_anual_elem
+
+                    elementos_data.append({
+                        "elemento": elem,
+                        "meses": meses_elem,
+                        "total_anual": total_anual_elem,
+                        "tiene_apuntes": total_anual_elem > Decimal("0.00"),
+                    })
+
+                desglose.append({
+                    "categoria": cat,
+                    "elementos": elementos_data,
+                    "totales_meses": totales_mes_cat,
+                    "total_anual": total_anual_cat,
+                    "tiene_apuntes": total_anual_cat > Decimal("0.00"),
+                })
+
+            return desglose, totales_mes, total_anual
 
         # 1. Ingresos
         categorias_ingreso_qs = (
@@ -456,118 +395,28 @@ class FinanzasService:
             .prefetch_related("elementos")
             .order_by("nombre")
         )
-
-        desglose_ingresos = []
-        totales_ingresos_mes = [Decimal("0.00")] * 12
-        total_anual_ingresos = Decimal("0.00")
-
-        for cat in categorias_ingreso_qs:
-            elementos_data = []
-            totales_mes_cat = [Decimal("0.00")] * 12
-            total_anual_cat = Decimal("0.00")
-
-            for elem in cat.elementos.all():
-                meses_elem = []
-                total_anual_elem = Decimal("0.00")
-
-                for m in range(1, 13):
-                    items_m = [ing for ing in ingresos_qs if ing.elemento_id == elem.id and ing.fecha.month == m]
-                    subtotal_m = sum((item.monto for item in items_m), Decimal("0.00"))
-
-                    meses_elem.append({
-                        "mes": m,
-                        "total": subtotal_m,
-                        "count": len(items_m),
-                        "items": items_m,
-                    })
-
-                    total_anual_elem += subtotal_m
-                    totales_mes_cat[m - 1] += subtotal_m
-                    totales_ingresos_mes[m - 1] += subtotal_m
-
-                total_anual_cat += total_anual_elem
-                total_anual_ingresos += total_anual_elem
-
-                elementos_data.append({
-                    "elemento": elem,
-                    "meses": meses_elem,
-                    "total_anual": total_anual_elem,
-                    "tiene_apuntes": total_anual_elem > Decimal("0.00"),
-                })
-
-            desglose_ingresos.append({
-                "categoria": cat,
-                "elementos": elementos_data,
-                "totales_meses": totales_mes_cat,
-                "total_anual": total_anual_cat,
-                "tiene_apuntes": total_anual_cat > Decimal("0.00"),
-            })
-
-        # 2. Gastos
-        categorias_gasto_qs = (
-            Categoria.objects.filter(tipo=Categoria.Tipo.GASTO)
-            .prefetch_related("elementos")
-            .order_by("nombre")
+        desglose_ingresos, totales_ingresos_mes, total_anual_ingresos = _construir_desglose(
+            categorias_ingreso_qs,
+            _agregados_por_elemento_mes(Ingreso),
         )
 
-        desglose_gastos = []
-        totales_gastos_mes = [Decimal("0.00")] * 12
-        total_anual_gastos = Decimal("0.00")
-
-        for cat in categorias_gasto_qs:
-            elementos_data = []
-            totales_mes_cat = [Decimal("0.00")] * 12
-            total_anual_cat = Decimal("0.00")
-
-            for elem in cat.elementos.all():
-                meses_elem = []
-                total_anual_elem = Decimal("0.00")
-
-                for m in range(1, 13):
-                    items_m = [gas for gas in gastos_qs if gas.elemento_id == elem.id and gas.fecha.month == m]
-                    subtotal_m = sum((item.monto for item in items_m), Decimal("0.00"))
-
-                    meses_elem.append({
-                        "mes": m,
-                        "total": subtotal_m,
-                        "count": len(items_m),
-                        "items": items_m,
-                    })
-
-                    total_anual_elem += subtotal_m
-                    totales_mes_cat[m - 1] += subtotal_m
-                    totales_gastos_mes[m - 1] += subtotal_m
-
-                total_anual_cat += total_anual_elem
-                total_anual_gastos += total_anual_elem
-
-                elementos_data.append({
-                    "elemento": elem,
-                    "meses": meses_elem,
-                    "total_anual": total_anual_elem,
-                    "tiene_apuntes": total_anual_elem > Decimal("0.00"),
-                })
-
-            desglose_gastos.append({
-                "categoria": cat,
-                "elementos": elementos_data,
-                "totales_meses": totales_mes_cat,
-                "total_anual": total_anual_cat,
-                "tiene_apuntes": total_anual_cat > Decimal("0.00"),
-            })
+        # 2. Gastos
+        desglose_gastos, totales_gastos_mes, total_anual_gastos = _construir_desglose(
+            cls.get_categorias_gasto_queryset(),
+            _agregados_por_elemento_mes(Gasto),
+        )
 
         # 3. Totales globales mes a mes
         resumen_global_meses = []
         for m in range(1, 13):
             ing_m = totales_ingresos_mes[m - 1]
             gas_m = totales_gastos_mes[m - 1]
-            bal_m = ing_m - gas_m
             resumen_global_meses.append({
                 "mes": m,
                 "nombre": cls.MESES_ABREV[m - 1],
                 "ingresos": ing_m,
                 "gastos": gas_m,
-                "balance": bal_m,
+                "balance": ing_m - gas_m,
             })
 
         balance_anual = total_anual_ingresos - total_anual_gastos
@@ -605,7 +454,13 @@ class FinanzasService:
         if usuario_id:
             filtro_cuenta &= Q(usuario_id=usuario_id)
 
-        cuentas_qs = CuentaAhorro.objects.filter(filtro_cuenta).prefetch_related("saldos").order_by("nombre")
+        cuentas_qs = CuentaAhorro.objects.filter(filtro_cuenta).order_by("nombre")
+        cuentas = list(cuentas_qs)
+
+        # Carga masiva de saldos en una sola query para evitar consultas N+1
+        saldos_por_cuenta: Dict[int, List["RegistroSaldoMensual"]] = defaultdict(list)
+        for reg in RegistroSaldoMensual.objects.filter(cuenta__in=cuentas_qs).order_by("anio", "mes"):
+            saldos_por_cuenta[reg.cuenta_id].append(reg)
 
         filas_cuentas = []
         totales_meses: List[Optional[Decimal]] = [None] * 12
@@ -619,12 +474,15 @@ class FinanzasService:
         distribucion_data = []
         distribucion_colors = []
 
-        for cuenta in cuentas_qs:
-            saldos_anio = {s.mes: s for s in cuenta.saldos.filter(anio=anio)}
+        for cuenta in cuentas:
+            saldos_cuenta = saldos_por_cuenta.get(cuenta.id, [])
+            saldos_anio = {s.mes: s for s in saldos_cuenta if s.anio == anio}
+            previos = [s for s in saldos_cuenta if s.anio < anio]
+
             # Saldo a cierre de año anterior para calcular variación
-            saldo_anterior_cierre = cuenta.saldos.filter(anio=anio - 1, mes=12).first()
-            if not saldo_anterior_cierre:
-                saldo_anterior_cierre = cuenta.saldos.filter(anio__lt=anio).order_by("-anio", "-mes").first()
+            saldo_anterior_cierre = next((s for s in saldos_cuenta if s.anio == anio - 1 and s.mes == 12), None)
+            if not saldo_anterior_cierre and previos:
+                saldo_anterior_cierre = previos[-1]  # lista ordenada por (anio, mes)
 
             meses_datos = []
             datos_grafico_cuenta: List[Optional[float]] = []
@@ -666,7 +524,7 @@ class FinanzasService:
                     variacion_cuenta_pct = (((ultimo_saldo_cuenta - primer_saldo_cuenta) / primer_saldo_cuenta) * Decimal("100.00")).quantize(Decimal("0.01"))
 
             # Último saldo absoluto general de la cuenta
-            ultimo_absoluto = cuenta.get_ultimo_saldo()
+            ultimo_absoluto = saldos_cuenta[-1] if saldos_cuenta else None
             saldo_act = ultimo_absoluto.saldo if ultimo_absoluto else Decimal("0.00")
             total_ahorro_actual += saldo_act
 
@@ -744,15 +602,21 @@ class FinanzasService:
             else None
         )
 
-        # Datos para comparativa con año anterior
+        # Datos para comparativa con año anterior (1 query agrupada)
         totales_anio_anterior: List[Optional[float]] = []
-        for m_idx in range(1, 13):
-            s_ant = RegistroSaldoMensual.objects.filter(
-                cuenta__in=cuentas_qs,
-                anio=anio - 1,
-                mes=m_idx,
-            ).aggregate(total=Sum("saldo"))["total"]
-            totales_anio_anterior.append(float(s_ant) if s_ant is not None else None)
+        if cuentas:
+            agrupados_prev = (
+                RegistroSaldoMensual.objects.filter(cuenta__in=cuentas, anio=anio - 1)
+                .values("mes")
+                .annotate(total=Sum("saldo"))
+            )
+            total_prev_por_mes = {fila["mes"]: fila["total"] for fila in agrupados_prev}
+            totales_anio_anterior = [
+                float(total_prev_por_mes[m]) if m in total_prev_por_mes else None
+                for m in range(1, 13)
+            ]
+        else:
+            totales_anio_anterior = [None] * 12
 
         return {
             "anio": anio,

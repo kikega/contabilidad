@@ -15,3 +15,7 @@ __pycache__/
 *.pyc
 .venv/
 db.sqlite3
+
+# Node / Tailwind build
+node_modules/
+static/css/tailwind.min.css

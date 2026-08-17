@@ -6,7 +6,6 @@ from finanzas.models import (
     CuentaAhorro,
     Elemento,
     Gasto,
-    GastoEspecialTarjeta,
     Ingreso,
     RegistroSaldoMensual,
 )
@@ -64,17 +63,6 @@ class GastoAdmin(admin.ModelAdmin):
     search_fields = ("concepto", "notas", "elemento__nombre")
     list_select_related = ("elemento__categoria", "usuario")
     autocomplete_fields = ["elemento", "usuario"]
-    date_hierarchy = "fecha"
-    ordering = ("-fecha",)
-
-
-@admin.register(GastoEspecialTarjeta)
-class GastoEspecialTarjetaAdmin(admin.ModelAdmin):
-    list_display = ("fecha", "comercio", "tipo_comercio", "tarjeta", "monto", "usuario")
-    list_filter = ("tipo_comercio", "tarjeta", "fecha", "usuario")
-    search_fields = ("comercio", "tarjeta", "notas")
-    list_select_related = ("usuario", "gasto_asociado")
-    autocomplete_fields = ["usuario", "gasto_asociado"]
     date_hierarchy = "fecha"
     ordering = ("-fecha",)
 

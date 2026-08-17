@@ -1,6 +1,7 @@
 """Vistas y endpoints HTMX para el módulo de Finanzas y Dashboard Principal."""
 
 import json
+from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, Optional
 from django.contrib import messages
@@ -11,6 +12,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView
 
@@ -19,7 +21,6 @@ from finanzas.forms import (
     CuentaAhorroForm,
     ElementoForm,
     FiltroFinanzasForm,
-    GastoEspecialTarjetaForm,
     GastoForm,
     IngresoForm,
     RegistroSaldoMensualForm,
@@ -29,11 +30,41 @@ from finanzas.models import (
     CuentaAhorro,
     Elemento,
     Gasto,
-    GastoEspecialTarjeta,
     Ingreso,
     RegistroSaldoMensual,
 )
 from finanzas.services import FinanzasService
+
+
+def _next_url_valida(request: HttpRequest, next_url: Optional[str]) -> Optional[str]:
+    """Devuelve el parámetro 'next' solo si es una URL interna segura (evita open redirects)."""
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return next_url
+    return None
+
+
+def _int_param(
+    valor: Optional[str],
+    default: Optional[int] = None,
+    minimo: Optional[int] = None,
+    maximo: Optional[int] = None,
+) -> Optional[int]:
+    """Convierte un parámetro a entero con valores por defecto y acotación segura."""
+    try:
+        num = int(valor) if valor not in (None, "") else default
+    except (ValueError, TypeError):
+        num = default
+    if num is None:
+        return None
+    if minimo is not None and num < minimo:
+        num = minimo
+    if maximo is not None and num > maximo:
+        num = maximo
+    return num
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -61,7 +92,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             anios_disponibles.append(anio)
             anios_disponibles.sort()
 
-        mes = int(mes_param) if mes_param and mes_param.isdigit() else None
+        mes = _int_param(mes_param, None, 1, 12)
 
         fecha_inicio, fecha_fin, anio_actual, mes_actual = FinanzasService.get_periodo_fechas(anio, mes)
 
@@ -77,7 +108,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         context.update({
             "kpis": kpis,
-            "graficos_data_json": json.dumps(graficos_data),
+            "graficos_data": graficos_data,
             "movimientos_recientes": movimientos_recientes,
             "anio_actual": anio_actual,
             "mes_actual": mes_actual,
@@ -158,30 +189,33 @@ class ElementoMesDetalleHtmxView(LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         elemento_id = request.GET.get("elemento_id")
-        anio = int(request.GET.get("anio", timezone.now().year))
-        mes = int(request.GET.get("mes", timezone.now().month))
+        anio = _int_param(request.GET.get("anio"), timezone.now().year) or timezone.now().year
+        mes = _int_param(request.GET.get("mes"), timezone.now().month, 1, 12) or timezone.now().month
         tipo = request.GET.get("tipo", "gasto").lower()
 
         elemento = get_object_or_404(Elemento.objects.select_related("categoria"), id=elemento_id)
-        
+
         meses_nombres = [
             "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
         ]
         nombre_mes = meses_nombres[mes - 1]
 
+        inicio_mes = date(anio, mes, 1)
+        fin_mes = date(anio + 1, 1, 1) if mes == 12 else date(anio, mes + 1, 1)
+
         if tipo == "ingreso":
             items = Ingreso.objects.filter(
                 elemento=elemento,
-                fecha__year=anio,
-                fecha__month=mes,
+                fecha__gte=inicio_mes,
+                fecha__lt=fin_mes,
             ).select_related("usuario").order_by("fecha")
             total_mes = sum((item.monto for item in items), Decimal("0.00"))
         else:
             items = Gasto.objects.filter(
                 elemento=elemento,
-                fecha__year=anio,
-                fecha__month=mes,
+                fecha__gte=inicio_mes,
+                fecha__lt=fin_mes,
             ).select_related("usuario").order_by("fecha")
             total_mes = sum((item.monto for item in items), Decimal("0.00"))
 
@@ -208,9 +242,9 @@ class TransaccionesTablaHtmxView(LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         hoy = timezone.now().date()
-        anio = int(request.GET.get("anio", hoy.year))
+        anio = _int_param(request.GET.get("anio"), hoy.year) or hoy.year
         mes_param = request.GET.get("mes")
-        mes = int(mes_param) if mes_param and mes_param.isdigit() else None
+        mes = _int_param(mes_param, None, 1, 12)
         tipo = request.GET.get("tipo", "TODOS")
         busqueda = request.GET.get("q", "").strip()
 
@@ -289,7 +323,7 @@ class GraficosDataApiView(LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> JsonResponse:
         hoy = timezone.now().date()
-        anio = int(request.GET.get("anio", hoy.year))
+        anio = _int_param(request.GET.get("anio"), hoy.year) or hoy.year
         datos = FinanzasService.get_datos_graficos_anuales(anio)
         return JsonResponse(datos)
 
@@ -320,9 +354,7 @@ class IngresoCreateView(LoginRequiredMixin, CreateView):
 
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
-        if next_url:
-            return next_url
-        return reverse_lazy("finanzas:cuentas")
+        return _next_url_valida(self.request, next_url) or reverse_lazy("finanzas:cuentas")
 
     def form_valid(self, form: IngresoForm) -> HttpResponse:
         form.instance.usuario = self.request.user
@@ -343,9 +375,7 @@ class IngresoUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
-        if next_url:
-            return next_url
-        return reverse_lazy("finanzas:cuentas")
+        return _next_url_valida(self.request, next_url) or reverse_lazy("finanzas:cuentas")
 
     def form_valid(self, form: IngresoForm) -> HttpResponse:
         messages.success(self.request, "Ingreso actualizado correctamente.")
@@ -363,9 +393,7 @@ class IngresoDeleteView(LoginRequiredMixin, DeleteView):
 
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
-        if next_url:
-            return next_url
-        return reverse_lazy("finanzas:cuentas")
+        return _next_url_valida(self.request, next_url) or reverse_lazy("finanzas:cuentas")
 
     def delete(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         messages.info(request, "Ingreso eliminado.")
@@ -401,9 +429,7 @@ class GastoCreateView(LoginRequiredMixin, CreateView):
 
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
-        if next_url:
-            return next_url
-        return reverse_lazy("finanzas:cuentas")
+        return _next_url_valida(self.request, next_url) or reverse_lazy("finanzas:cuentas")
 
     def form_valid(self, form: GastoForm) -> HttpResponse:
         form.instance.usuario = self.request.user
@@ -424,9 +450,7 @@ class GastoUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
-        if next_url:
-            return next_url
-        return reverse_lazy("finanzas:cuentas")
+        return _next_url_valida(self.request, next_url) or reverse_lazy("finanzas:cuentas")
 
     def form_valid(self, form: GastoForm) -> HttpResponse:
         messages.success(self.request, "Gasto modificado correctamente.")
@@ -444,72 +468,10 @@ class GastoDeleteView(LoginRequiredMixin, DeleteView):
 
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
-        if next_url:
-            return next_url
-        return reverse_lazy("finanzas:cuentas")
+        return _next_url_valida(self.request, next_url) or reverse_lazy("finanzas:cuentas")
 
     def delete(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         messages.info(request, "Gasto eliminado.")
-        response = super().delete(request, *args, **kwargs)
-        if request.headers.get("HX-Request"):
-            return HttpResponse(status=204, headers={"HX-Refresh": "true"})
-        return response
-
-
-# ==============================================================================
-# AUDITORÍA DE TARJETAS
-# ==============================================================================
-
-class GastoEspecialTarjetaListView(LoginRequiredMixin, ListView):
-    """Listado y auditoría de compras especiales realizadas con tarjeta."""
-
-    model = GastoEspecialTarjeta
-    template_name = "finanzas/tarjetas_list.html"
-    context_object_name = "tarjetas"
-    paginate_by = 15
-
-    def get_queryset(self):
-        qs = super().get_queryset().select_related("usuario")
-        tipo = self.request.GET.get("tipo")
-        tarjeta = self.request.GET.get("tarjeta")
-        if tipo:
-            qs = qs.filter(tipo_comercio=tipo)
-        if tarjeta:
-            qs = qs.filter(tarjeta__icontains=tarjeta)
-        return qs
-
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context = super().get_context_data(**kwargs)
-        context["tipos_comercio"] = GastoEspecialTarjeta.TipoComercio.choices
-        context["form"] = GastoEspecialTarjetaForm()
-        return context
-
-
-class GastoEspecialTarjetaCreateView(LoginRequiredMixin, CreateView):
-    """Registro de compra especial de tarjeta."""
-
-    model = GastoEspecialTarjeta
-    form_class = GastoEspecialTarjetaForm
-    template_name = "finanzas/tarjeta_form.html"
-    success_url = reverse_lazy("finanzas:tarjetas_list")
-
-    def form_valid(self, form: GastoEspecialTarjetaForm) -> HttpResponse:
-        form.instance.usuario = self.request.user
-        messages.success(self.request, "Operación de tarjeta registrada.")
-        response = super().form_valid(form)
-        if self.request.headers.get("HX-Request"):
-            return HttpResponse(status=204, headers={"HX-Refresh": "true"})
-        return response
-
-
-class GastoEspecialTarjetaDeleteView(LoginRequiredMixin, DeleteView):
-    """Eliminación de registro de tarjeta."""
-
-    model = GastoEspecialTarjeta
-    success_url = reverse_lazy("finanzas:tarjetas_list")
-
-    def delete(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        messages.info(request, "Registro de tarjeta eliminado.")
         response = super().delete(request, *args, **kwargs)
         if request.headers.get("HX-Request"):
             return HttpResponse(status=204, headers={"HX-Refresh": "true"})
@@ -540,17 +502,13 @@ class AdministracionView(LoginRequiredMixin, TemplateView):
             )
             .order_by("nombre")
         )
-        categorias_gasto = (
-            Categoria.objects.filter(tipo=Categoria.Tipo.GASTO)
-            .prefetch_related(
-                Prefetch(
-                    "elementos",
-                    queryset=Elemento.objects.prefetch_related(
-                        Prefetch("gastos", queryset=Gasto.objects.select_related("usuario").order_by("-fecha", "-id"))
-                    ).order_by("nombre"),
-                )
+        categorias_gasto = FinanzasService.get_categorias_gasto_queryset(
+            elementos_prefetch=Prefetch(
+                "elementos",
+                queryset=Elemento.objects.prefetch_related(
+                    Prefetch("gastos", queryset=Gasto.objects.select_related("usuario").order_by("-fecha", "-id"))
+                ).order_by("nombre"),
             )
-            .order_by("nombre")
         )
         categorias_tarjeta = Categoria.objects.filter(tipo=Categoria.Tipo.ESPECIAL_TARJETA).order_by("nombre")
 
@@ -693,10 +651,7 @@ class AhorrosListView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         hoy = timezone.now().date()
 
-        try:
-            anio = int(self.request.GET.get("anio", hoy.year))
-        except (ValueError, TypeError):
-            anio = hoy.year
+        anio = _int_param(self.request.GET.get("anio"), hoy.year) or hoy.year
 
         anios_disponibles = FinanzasService.get_anios_disponibles()
         if anio not in anios_disponibles:
@@ -710,7 +665,7 @@ class AhorrosListView(LoginRequiredMixin, TemplateView):
         context["resumen"] = resumen_ahorros
         context["cuentas_activas"] = CuentaAhorro.objects.filter(activo=True).order_by("nombre")
         context["form_cuenta"] = CuentaAhorroForm()
-        context["graficos_json"] = json.dumps(resumen_ahorros["graficos"])
+        context["graficos"] = resumen_ahorros["graficos"]
         return context
 
 
@@ -719,10 +674,7 @@ class MatrizAhorrosHtmxView(LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         hoy = timezone.now().date()
-        try:
-            anio = int(request.GET.get("anio", hoy.year))
-        except (ValueError, TypeError):
-            anio = hoy.year
+        anio = _int_param(request.GET.get("anio"), hoy.year) or hoy.year
 
         resumen_ahorros = FinanzasService.get_resumen_ahorros_anual(anio=anio)
         response = render(
@@ -742,17 +694,15 @@ class GuardarSaldoMensualHtmxView(LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         cuenta_id = request.POST.get("cuenta_id")
-        anio_str = request.POST.get("anio")
-        mes_str = request.POST.get("mes")
+        anio = _int_param(request.POST.get("anio"), timezone.now().year) or timezone.now().year
+        mes = _int_param(request.POST.get("mes"), timezone.now().month, 1, 12) or timezone.now().month
         saldo_str = request.POST.get("saldo", "").replace(",", ".").strip()
         notas = request.POST.get("notas", "").strip()
 
         try:
             cuenta = get_object_or_404(CuentaAhorro, id=cuenta_id)
-            anio = int(anio_str)
-            mes = int(mes_str)
 
-            if saldo_str == "" or saldo_str is None:
+            if saldo_str == "":
                 # Si se deja en blanco, eliminar el registro
                 RegistroSaldoMensual.objects.filter(cuenta=cuenta, anio=anio, mes=mes).delete()
             else:
@@ -763,7 +713,7 @@ class GuardarSaldoMensualHtmxView(LoginRequiredMixin, View):
                     mes=mes,
                     defaults={"saldo": saldo_dec, "notas": notas},
                 )
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError):
             pass
 
         resumen_ahorros = FinanzasService.get_resumen_ahorros_anual(anio=anio)

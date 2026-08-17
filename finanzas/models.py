@@ -1,12 +1,27 @@
-"""Modelos de datos para el dominio financiero: Categorías, Elementos, Ingresos, Gastos y Desglose de Tarjetas."""
+"""Modelos de datos para el dominio financiero: Categorías, Elementos, Ingresos y Gastos.
+
+Nota sobre el modelo de datos compartido: esta aplicación es de uso familiar y, por decisión de diseño,
+los datos (categorías, elementos, ingresos, gastos, ahorros, seguros) se comparten entre todos los
+miembros del hogar. El campo ``usuario`` solo indica "titular o responsable" y NO se usa como
+filtro de aislamiento por usuario en consultas ni vistas. No añadir filtros por ``request.user``.
+"""
 
 from decimal import Decimal
 from typing import Optional
 from django.conf import settings
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+COLOR_HEX_VALIDATOR = RegexValidator(
+    regex=r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+    message=_("Introduce un color en formato hexadecimal (ej: #3BB8DB)."),
+)
+ICONO_VALIDATOR = RegexValidator(
+    regex=r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$",
+    message=_("El icono solo puede contener letras, números, guiones y subrayados."),
+)
 
 
 class Categoria(models.Model):
@@ -29,12 +44,14 @@ class Categoria(models.Model):
         _("icono identificador"),
         max_length=50,
         default="folder",
+        validators=[ICONO_VALIDATOR],
         help_text=_("Nombre del icono SVG/Lucide para renderizar en la interfaz (ej: home, car, heart-pulse)."),
     )
     color = models.CharField(
         _("código de color"),
         max_length=20,
         default="#3BB8DB",
+        validators=[COLOR_HEX_VALIDATOR],
         help_text=_("Color representativo para gráficas y etiquetas (ej: #3BB8DB)."),
     )
     descripcion = models.TextField(_("descripción"), blank=True)
@@ -75,6 +92,7 @@ class Elemento(models.Model):
         _("icono específico"),
         max_length=50,
         blank=True,
+        validators=[ICONO_VALIDATOR],
         help_text=_("Icono específico opcional. Si está vacío heredará el icono de su categoría."),
     )
     descripcion = models.TextField(_("descripción"), blank=True)
@@ -215,76 +233,6 @@ class Gasto(models.Model):
         return f"{elem_name}: {self.concepto} - {self.monto}€ ({self.fecha})"
 
 
-class GastoEspecialTarjeta(models.Model):
-    """Auditoría y desglose detallado de compras clave realizadas con tarjetas de crédito."""
-
-    class TipoComercio(models.TextChoices):
-        SUPERMERCADO = "SUPERMERCADO", _("Supermercados / Alimentación")
-        MERCADO = "MERCADO", _("Mercados y Comercio Local")
-        RESTAURANTE_OCIO = "RESTAURANTE_OCIO", _("Restaurantes y Ocio")
-        GASOLINA = "GASOLINA", _("Combustible y Estaciones de Servicio")
-        COMPRAS_ONLINE = "COMPRAS_ONLINE", _("Compras Online")
-        FARMACIA_SALUD = "FARMACIA_SALUD", _("Farmacia y Cuidado Personal")
-        OTROS = "OTROS", _("Otros Pagos con Tarjeta")
-
-    usuario = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="gastos_tarjeta",
-        verbose_name=_("titular / usuario"),
-    )
-    tarjeta = models.CharField(
-        _("tarjeta utilizada"),
-        max_length=100,
-        help_text=_("Nombre identificativo (ej: Visa Oro Titular 1, Mastercard Familiar)."),
-    )
-    tipo_comercio = models.CharField(
-        _("tipo de comercio"),
-        max_length=30,
-        choices=TipoComercio.choices,
-        default=TipoComercio.SUPERMERCADO,
-        db_index=True,
-    )
-    comercio = models.CharField(
-        _("establecimiento / comercio"),
-        max_length=200,
-        help_text=_("Nombre del comercio (ej: Mercadona, Carrefour, Amazon)."),
-    )
-    monto = models.DecimalField(
-        _("importe (€)"),
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal("0.01"))],
-    )
-    fecha = models.DateField(_("fecha de la operación"), default=timezone.now, db_index=True)
-    gasto_asociado = models.ForeignKey(
-        Gasto,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="desgloses_tarjeta",
-        verbose_name=_("gasto global vinculado"),
-        help_text=_("Opcional: vinculación con el apunte agregado mensual de tarjeta."),
-    )
-    notas = models.TextField(_("notas"), blank=True)
-    creado_en = models.DateTimeField(_("creado en"), auto_now_add=True)
-    actualizado_en = models.DateTimeField(_("actualizado en"), auto_now=True)
-
-    class Meta:
-        verbose_name = _("control especial de tarjeta")
-        verbose_name_plural = _("controles especiales de tarjetas")
-        ordering = ["-fecha", "-creado_en"]
-        indexes = [
-            models.Index(fields=["fecha", "tipo_comercio"]),
-            models.Index(fields=["tarjeta", "fecha"]),
-        ]
-
-    def __str__(self) -> str:
-        return f"{self.comercio} ({self.get_tipo_comercio_display()}) - {self.monto}€ [{self.tarjeta}]"
-
-
 class CuentaAhorro(models.Model):
     """Cuenta, hucha o depósito destinado a la acumulación de ahorro o inversión."""
 
@@ -317,12 +265,14 @@ class CuentaAhorro(models.Model):
         _("código de color"),
         max_length=20,
         default="#3BB8DB",
+        validators=[COLOR_HEX_VALIDATOR],
         help_text=_("Color distintivo para gráficas y visualización (ej: #3BB8DB)."),
     )
     icono = models.CharField(
         _("icono identificador"),
         max_length=50,
         default="piggy-bank",
+        validators=[ICONO_VALIDATOR],
         help_text=_("Nombre del icono Lucide (ej: piggy-bank, landmark, trending-up, wallet)."),
     )
     numero_cuenta_iban = models.CharField(

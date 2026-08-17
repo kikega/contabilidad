@@ -5,7 +5,7 @@ from typing import Any
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from finanzas.models import Categoria, Elemento, Gasto, GastoEspecialTarjeta, Ingreso
+from finanzas.models import Categoria, Elemento, Gasto, Ingreso
 
 # Estilos base para inputs con Tailwind CSS y soporte de Dark Mode
 INPUT_CLASSES = (
@@ -161,50 +161,6 @@ class GastoForm(forms.ModelForm):
         self.fields["elemento"].queryset = Elemento.objects.filter(
             categoria__tipo=Categoria.Tipo.GASTO
         ).select_related("categoria").order_by("categoria__nombre", "nombre")
-
-
-class GastoEspecialTarjetaForm(forms.ModelForm):
-    """Formulario para el desglose y auditoría de compras individuales con tarjeta."""
-
-    class Meta:
-        model = GastoEspecialTarjeta
-        fields = ["tarjeta", "tipo_comercio", "comercio", "monto", "fecha", "notas"]
-        widgets = {
-            "tarjeta": forms.TextInput(
-                attrs={
-                    "class": INPUT_CLASSES,
-                    "placeholder": "Ej: Visa Oro Titular 1, Mastercard Hogar...",
-                }
-            ),
-            "tipo_comercio": forms.Select(attrs={"class": SELECT_CLASSES}),
-            "comercio": forms.TextInput(
-                attrs={
-                    "class": INPUT_CLASSES,
-                    "placeholder": "Ej: Mercadona, Carrefour, Restaurante El Rincón...",
-                }
-            ),
-            "monto": forms.NumberInput(
-                attrs={
-                    "class": INPUT_CLASSES,
-                    "placeholder": "0.00",
-                    "step": "0.01",
-                    "min": "0.01",
-                }
-            ),
-            "fecha": forms.DateInput(
-                attrs={
-                    "class": INPUT_CLASSES,
-                    "type": "date",
-                }
-            ),
-            "notas": forms.Textarea(
-                attrs={
-                    "class": INPUT_CLASSES,
-                    "rows": 3,
-                    "placeholder": "Detalles de la compra...",
-                }
-            ),
-        }
 
 
 class FiltroFinanzasForm(forms.Form):

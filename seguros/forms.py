@@ -5,22 +5,8 @@ from typing import Any
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
+from finanzas.forms import CHECKBOX_CLASSES, INPUT_CLASSES, SELECT_CLASSES
 from seguros.models import HistorialRenovacionSeguro, Seguro
-
-INPUT_CLASSES = (
-    "w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 "
-    "bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 "
-    "focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all placeholder:text-slate-400"
-)
-SELECT_CLASSES = (
-    "w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 "
-    "bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 "
-    "focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all"
-)
-CHECKBOX_CLASSES = (
-    "rounded border-slate-300 dark:border-slate-700 text-cyan-600 "
-    "focus:ring-cyan-500 h-4 w-4 bg-white dark:bg-slate-800"
-)
 
 
 class SeguroForm(forms.ModelForm):

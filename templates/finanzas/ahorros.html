@@ -372,11 +372,12 @@
 </div>
 
 <!-- Scripts de Inicialización de Chart.js y Gestión del Modal -->
+{{ graficos|json_script:"graficos-ahorros-data" }}
 <script>
   let chartEvolucion = null;
   let chartDistribucion = null;
 
-  const graficosDataInicial = {{ graficos_json|safe }};
+  const graficosDataInicial = JSON.parse(document.getElementById('graficos-ahorros-data').textContent);
 
   function inicializarGraficos(datos) {
     const isDark = document.documentElement.classList.contains('dark');

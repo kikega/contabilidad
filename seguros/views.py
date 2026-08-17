@@ -67,7 +67,6 @@ class SeguroDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         seguro = self.object
-        seguro.sync_elemento()
 
         hoy = timezone.now().date()
         fecha_def = seguro.fecha_vencimiento if seguro.fecha_vencimiento and seguro.fecha_vencimiento.year == hoy.year else hoy

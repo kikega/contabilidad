@@ -279,10 +279,11 @@
 
 {% block extra_js %}
 <!-- Inicialización de gráficos con datos del servidor -->
+{{ graficos_data|json_script:"graficos-data" }}
 <script src="{% static 'js/dashboard_charts.js' %}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    window.initialChartData = {{ graficos_json|safe }};
+    window.initialChartData = JSON.parse(document.getElementById('graficos-data').textContent);
     if (window.dashboardCharts && window.initialChartData) {
       window.dashboardCharts.init(window.initialChartData);
     }

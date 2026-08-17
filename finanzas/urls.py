@@ -19,9 +19,6 @@ from finanzas.views import (
     ElementoUpdateView,
     GastoCreateView,
     GastoDeleteView,
-    GastoEspecialTarjetaCreateView,
-    GastoEspecialTarjetaDeleteView,
-    GastoEspecialTarjetaListView,
     GastoUpdateView,
     GraficosDataApiView,
     GuardarSaldoMensualHtmxView,
@@ -70,10 +67,5 @@ urlpatterns = [
     path("gastos/nuevo/", GastoCreateView.as_view(), name="gasto_create"),
     path("gastos/<int:pk>/editar/", GastoUpdateView.as_view(), name="gasto_update"),
     path("gastos/<int:pk>/eliminar/", GastoDeleteView.as_view(), name="gasto_delete"),
-
-    # Tarjetas Especiales
-    path("tarjetas/", GastoEspecialTarjetaListView.as_view(), name="tarjetas_list"),
-    path("tarjetas/nuevo/", GastoEspecialTarjetaCreateView.as_view(), name="tarjeta_create"),
-    path("tarjetas/<int:pk>/eliminar/", GastoEspecialTarjetaDeleteView.as_view(), name="tarjeta_delete"),
 ]
 
