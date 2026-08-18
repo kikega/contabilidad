@@ -332,6 +332,7 @@ class FinanzasService:
         return {
             "anios": anios,
             "filas": filas,
+            "filas_por_anio": {f["anio"]: f for f in filas},
             "categorias": [
                 {
                     "id": cid,

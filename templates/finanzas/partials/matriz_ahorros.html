@@ -31,28 +31,13 @@
               </a>
             </div>
           </div>
-          <div class="mt-2 flex items-center justify-between gap-2">
-            {% if fila.ultimo_saldo_anio is not None %}
-              {% if fila.variacion_importe > 0 %}
-              <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-                <i data-lucide="trending-up" class="w-3 h-3 mr-1"></i> +{{ fila.variacion_importe }} € (+{{ fila.variacion_porcentaje }}%)
-              </span>
-              {% elif fila.variacion_importe < 0 %}
-              <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
-                <i data-lucide="trending-down" class="w-3 h-3 mr-1"></i> {{ fila.variacion_importe }} € ({{ fila.variacion_porcentaje }}%)
-              </span>
-              {% else %}
-              <span class="text-slate-400 text-[10px] font-medium">0.00 € (0%)</span>
-              {% endif %}
-            {% else %}
-            <span class="text-slate-300 dark:text-slate-600 text-[10px]">—</span>
-            {% endif %}
-            {% if fila.cuenta.objetivo_monto %}
+          {% if fila.cuenta.objetivo_monto %}
+          <div class="mt-2">
             <span class="text-[10px] font-semibold text-slate-400" title="Objetivo de la cuenta">
               Meta: {{ fila.cuenta.objetivo_monto|floatformat:0 }} €
             </span>
-            {% endif %}
           </div>
+          {% endif %}
         </th>
         {% endfor %}
         <th class="px-3 py-3.5 min-w-[135px] align-top bg-slate-100/50 dark:bg-slate-800/80">
@@ -149,7 +134,25 @@
           <i data-lucide="trending-up" class="w-4 h-4 mr-1.5 inline-block text-emerald-500"></i>
           Crecimiento Anual
         </td>
-        <td colspan="{{ resumen.filas_cuentas|length }}" class="px-3 py-3.5"></td>
+        {% for fila in resumen.filas_cuentas %}
+        <td class="px-3 py-3.5 text-right whitespace-nowrap">
+          {% if fila.ultimo_saldo_anio is not None %}
+            {% if fila.variacion_importe > 0 %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+              <i data-lucide="trending-up" class="w-3 h-3 mr-1"></i> +{{ fila.variacion_importe }} € (+{{ fila.variacion_porcentaje }}%)
+            </span>
+            {% elif fila.variacion_importe < 0 %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+              <i data-lucide="trending-down" class="w-3 h-3 mr-1"></i> {{ fila.variacion_importe }} € ({{ fila.variacion_porcentaje }}%)
+            </span>
+            {% else %}
+            <span class="text-slate-400 text-[10px] font-medium">0.00 € (0%)</span>
+            {% endif %}
+          {% else %}
+          <span class="text-slate-300 dark:text-slate-600 text-[10px]">—</span>
+          {% endif %}
+        </td>
+        {% endfor %}
         <td class="px-3 py-3.5 text-right whitespace-nowrap">
           {% if resumen.kpis.crecimiento_anio_importe > 0 %}
           <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">

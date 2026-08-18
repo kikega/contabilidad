@@ -36,7 +36,6 @@ class DashboardChartsManager {
   init(data) {
     if (!data) return;
     this.renderChartIngresosGastos(data);
-    this.renderChartAhorroAcumulado(data);
     this.renderChartDistribucion(data);
   }
 
@@ -124,7 +123,7 @@ class DashboardChartsManager {
     });
   }
 
-  renderChartAhorroAcumulado(data) {
+  renderChartEvolucionAhorroAnual(data) {
     const ctx = document.getElementById('chartAhorroAcumulado');
     if (!ctx) return;
 
@@ -133,36 +132,67 @@ class DashboardChartsManager {
     }
 
     const colors = this.getThemeColors();
-    const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 240);
-    gradient.addColorStop(0, 'rgba(59, 184, 219, 0.45)');
-    gradient.addColorStop(1, 'rgba(59, 184, 219, 0.0)');
+    const ahorroColor = this.isDarkMode() ? '#34D399' : '#10B981';
+    const ahorroBg = this.isDarkMode() ? 'rgba(52, 211, 153, 0.85)' : 'rgba(16, 185, 129, 0.85)';
+    const anios = data.anios || [];
+    const ahorro = data.ahorro || [];
+    const gastos = data.gastos || [];
+
+    const tendencia = this._calcularTendenciaLineal(anios, ahorro);
 
     this.chartAhorroAcumulado = new Chart(ctx, {
-      type: 'line',
+      type: 'bar',
       data: {
-        labels: data.meses,
+        labels: anios,
         datasets: [
           {
-            label: 'Ahorro Acumulado (€)',
-            data: data.ahorro_acumulado,
-            borderColor: colors.cyan500,
+            label: 'Ahorro (€)',
+            data: ahorro,
+            backgroundColor: ahorroBg,
+            borderRadius: 6,
+            barPercentage: 0.45,
+            categoryPercentage: 0.5,
+          },
+          {
+            label: 'Gastos (€)',
+            data: gastos,
+            backgroundColor: colors.gastosBg,
+            borderRadius: 6,
+            barPercentage: 0.45,
+            categoryPercentage: 0.5,
+          },
+          {
+            type: 'line',
+            label: 'Tendencia del Ahorro',
+            data: tendencia,
+            borderColor: ahorroColor,
             borderWidth: 2.5,
-            fill: true,
-            backgroundColor: gradient,
-            tension: 0.35,
-            pointBackgroundColor: colors.cyan500,
-            pointBorderColor: '#FFFFFF',
-            pointBorderWidth: 2,
-            pointRadius: 4,
-            pointHoverRadius: 6,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false,
+            tension: 0,
           },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
         plugins: {
-          legend: { display: false },
+          legend: {
+            position: 'top',
+            labels: {
+              color: colors.textColor,
+              usePointStyle: true,
+              pointStyle: 'circle',
+              boxWidth: 8,
+              font: { size: 12, family: 'system-ui' },
+            },
+          },
           tooltip: {
             backgroundColor: colors.tooltipBg,
             titleColor: colors.tooltipText,
@@ -171,7 +201,7 @@ class DashboardChartsManager {
             borderWidth: 1,
             padding: 10,
             callbacks: {
-              label: (context) => ` Ahorro Acumulado: ${context.raw.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`,
+              label: (context) => ` ${context.dataset.label}: ${context.raw.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`,
             },
           },
         },
@@ -191,6 +221,28 @@ class DashboardChartsManager {
         },
       },
     });
+  }
+
+  _calcularTendenciaLineal(labels, valores) {
+    if (!labels || labels.length < 2 || !valores || valores.length !== labels.length) {
+      return valores || [];
+    }
+    const n = labels.length;
+    let sumaX = 0;
+    let sumaY = 0;
+    let sumaXY = 0;
+    let sumaXX = 0;
+    labels.forEach((x, i) => {
+      const y = valores[i] || 0;
+      sumaX += x;
+      sumaY += y;
+      sumaXY += x * y;
+      sumaXX += x * x;
+    });
+    const denom = n * sumaXX - sumaX * sumaX;
+    const pendiente = denom !== 0 ? (n * sumaXY - sumaX * sumaY) / denom : 0;
+    const intercepto = (sumaY - pendiente * sumaX) / n;
+    return labels.map((x) => pendiente * x + intercepto);
   }
 
   renderChartDistribucion(data) {
@@ -264,6 +316,9 @@ class DashboardChartsManager {
       .then((res) => res.json())
       .then((data) => {
         this.init(data);
+        if (window.comparativaChartData) {
+          this.renderChartEvolucionAhorroAnual(window.comparativaChartData);
+        }
       })
       .catch((err) => console.error('Error al actualizar gráficos:', err));
   }
@@ -272,6 +327,7 @@ class DashboardChartsManager {
     if (!data) return;
     this.renderChartComparativa(data);
     this.renderChartCategoriasAnual(data);
+    this.renderChartEvolucionAhorroAnual(data);
   }
 
   renderChartComparativa(data) {
