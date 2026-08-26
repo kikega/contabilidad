@@ -148,49 +148,9 @@ class Seguro(models.Model):
         return f"{self.get_ramo_display()} - {self.compania} ({self.bien_asegurado}) - {self.prima_actual}€"
 
     def sync_elemento(self) -> Any:
-        """Sincroniza o genera el Elemento contable correspondiente bajo la categoría Seguros."""
-        from finanzas.models import Categoria, Elemento
-
-        cat_seguros, _ = Categoria.objects.get_or_create(
-            nombre="Seguros",
-            tipo=Categoria.Tipo.GASTO,
-            defaults={
-                "icono": "shield-check",
-                "color": "#2C92B8",
-                "descripcion": "Pólizas de protección familiar, hogar y vehículos",
-            },
-        )
-
-        nombre_elem = f"{self.compania} - {self.bien_asegurado}".strip()
-        icono_elem = self.RAMO_ICONOS.get(self.ramo, "shield-check")
-        desc_elem = f"Póliza {self.numero_poliza} ({self.get_ramo_display()})"
-
-        if self.elemento_id:
-            elem = self.elemento
-            elem.categoria = cat_seguros
-            elem.nombre = nombre_elem
-            elem.icono = icono_elem
-            elem.descripcion = desc_elem
-            elem.es_fijo = True
-            elem.save()
-        else:
-            elem = Elemento.objects.filter(categoria=cat_seguros, nombre=nombre_elem).first()
-            if not elem:
-                elem = Elemento.objects.create(
-                    categoria=cat_seguros,
-                    nombre=nombre_elem,
-                    icono=icono_elem,
-                    descripcion=desc_elem,
-                    es_fijo=True,
-                )
-            else:
-                elem.icono = icono_elem
-                elem.descripcion = desc_elem
-                elem.es_fijo = True
-                elem.save()
-            self.elemento = elem
-
-        return self.elemento
+        """Sincroniza o genera el Elemento contable correspondiente bajo la categoría Seguros delegando en SeguroService."""
+        from seguros.services import SeguroService
+        return SeguroService.sync_elemento(self)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         super().save(*args, **kwargs)
@@ -208,41 +168,9 @@ class Seguro(models.Model):
         return self.elemento.gastos.select_related("usuario").order_by("-fecha")
 
     def get_resumen_gastos_anuales(self) -> list:
-        """Agrupa los gastos reales pagados por año para análisis comparativo interanual."""
-        from django.db.models import Count, Sum
-        if not self.elemento_id:
-            return []
-
-        qs = (
-            self.elemento.gastos.values("fecha__year")
-            .annotate(total=Sum("monto"), num_pagos=Count("id"))
-            .order_by("-fecha__year")
-        )
-
-        resumen = []
-        lista = list(qs)
-        for i, item in enumerate(lista):
-            anio = item["fecha__year"]
-            total = item["total"] or Decimal("0.00")
-
-            prev_total = None
-            var_importe = Decimal("0.00")
-            var_porcentaje = Decimal("0.00")
-            if i + 1 < len(lista):
-                prev_total = lista[i + 1]["total"] or Decimal("0.00")
-                var_importe = (total - prev_total).quantize(Decimal("0.01"))
-                if prev_total > Decimal("0.00"):
-                    var_porcentaje = (((total - prev_total) / prev_total) * Decimal("100.00")).quantize(Decimal("0.01"))
-
-            resumen.append({
-                "anio": anio,
-                "total": total,
-                "num_pagos": item["num_pagos"],
-                "prev_total": prev_total,
-                "var_importe": var_importe,
-                "var_porcentaje": var_porcentaje,
-            })
-        return resumen
+        """Agrupa los gastos reales pagados por año para análisis comparativo interanual delegando en SeguroService."""
+        from seguros.services import SeguroService
+        return SeguroService.get_resumen_gastos_anuales(self)
 
     @property
     def incremento_importe(self) -> Decimal:
@@ -262,7 +190,7 @@ class Seguro(models.Model):
     @property
     def dias_para_vencimiento(self) -> int:
         """Devuelve el número de días restantes hasta el vencimiento de la póliza."""
-        hoy = timezone.localdate() if hasattr(timezone, "localdate") else timezone.now().date()
+        hoy = timezone.localdate()
         return (self.fecha_vencimiento - hoy).days
 
     @property

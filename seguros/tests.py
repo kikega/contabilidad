@@ -18,7 +18,7 @@ class SegurosModelsTests(TestCase):
             email="titular@ejemplo.com",
             password="Password123!",
         )
-        self.fecha_hoy = timezone.now().date()
+        self.fecha_hoy = timezone.localdate()
 
     def test_calculo_incremento_porcentaje_e_importe(self) -> None:
         """Verifica que el cálculo de incremento anual (importe y porcentaje) sea exacto."""
@@ -154,4 +154,46 @@ class SegurosModelsTests(TestCase):
         self.assertEqual(resumen[0]["prev_total"], Decimal("380.00"))
         self.assertEqual(resumen[0]["var_importe"], Decimal("20.00"))
         self.assertEqual(resumen[0]["var_porcentaje"], Decimal("5.26"))
+
+    def test_seguro_service_kpis_y_desacoplamiento(self) -> None:
+        """Verifica que SeguroService calcule correctamente los KPIs y resúmenes de pólizas."""
+        from seguros.services import SeguroService
+
+        s1 = Seguro.objects.create(
+            usuario=self.usuario,
+            ramo=Seguro.Ramo.COCHE,
+            compania="Axa",
+            numero_poliza="AXA-11",
+            bien_asegurado="Coche 1",
+            fecha_vencimiento=self.fecha_hoy + timedelta(days=15),
+            prima_actual=Decimal("500.00"),
+            activo=True,
+        )
+        s2 = Seguro.objects.create(
+            usuario=self.usuario,
+            ramo=Seguro.Ramo.HOGAR,
+            compania="Mapfre",
+            numero_poliza="MAP-22",
+            bien_asegurado="Casa",
+            fecha_vencimiento=self.fecha_hoy + timedelta(days=50),
+            prima_actual=Decimal("300.00"),
+            activo=True,
+        )
+        s3_inactivo = Seguro.objects.create(
+            usuario=self.usuario,
+            ramo=Seguro.Ramo.VIDA,
+            compania="Generali",
+            numero_poliza="GEN-33",
+            bien_asegurado="Vida",
+            fecha_vencimiento=self.fecha_hoy + timedelta(days=10),
+            prima_actual=Decimal("200.00"),
+            activo=False,
+        )
+
+        kpis = SeguroService.get_kpis_seguros(Seguro.objects.all())
+        self.assertEqual(kpis["num_polizas"], 2)
+        self.assertEqual(kpis["coste_total_anual"], Decimal("800.00"))
+        self.assertEqual(kpis["urgentes_count"], 1)  # s1 (15 días)
+        self.assertEqual(kpis["proximos_count"], 1)  # s2 (50 días)
+
 

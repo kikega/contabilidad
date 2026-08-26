@@ -2,7 +2,7 @@
 
 import json
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -74,7 +74,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         anios_disponibles = FinanzasService.get_anios_disponibles()
 
         # Parámetros GET opcionales para filtrado temporal
@@ -126,7 +126,7 @@ class CuentasView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         anios_disponibles = FinanzasService.get_anios_disponibles()
 
         anio_param = self.request.GET.get("anio")
@@ -156,7 +156,7 @@ class CuentasMesHtmxView(LoginRequiredMixin, View):
     """Fragmento HTMX que devuelve la matriz anual completa de categorías y apuntes para un año específico."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         anios_disponibles = FinanzasService.get_anios_disponibles()
 
         anio_param = request.GET.get("anio")
@@ -188,9 +188,10 @@ class ElementoMesDetalleHtmxView(LoginRequiredMixin, View):
     """Devuelve el modal interactivo con los apuntes detallados de un elemento en un mes y año concretos."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
+        hoy = timezone.localdate()
         elemento_id = request.GET.get("elemento_id")
-        anio = _int_param(request.GET.get("anio"), timezone.now().year) or timezone.now().year
-        mes = _int_param(request.GET.get("mes"), timezone.now().month, 1, 12) or timezone.now().month
+        anio = _int_param(request.GET.get("anio"), hoy.year) or hoy.year
+        mes = _int_param(request.GET.get("mes"), hoy.month, 1, 12) or hoy.month
         tipo = request.GET.get("tipo", "gasto").lower()
 
         elemento = get_object_or_404(Elemento.objects.select_related("categoria"), id=elemento_id)
@@ -241,7 +242,7 @@ class TransaccionesTablaHtmxView(LoginRequiredMixin, View):
     """Renderizado parcial vía HTMX para la tabla interactiva de movimientos."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         anio = _int_param(request.GET.get("anio"), hoy.year) or hoy.year
         mes_param = request.GET.get("mes")
         mes = _int_param(mes_param, None, 1, 12)
@@ -322,7 +323,7 @@ class GraficosDataApiView(LoginRequiredMixin, View):
     """Endpoint que suministra datos estructurados JSON para refresco de gráficos."""
 
     def get(self, request: HttpRequest) -> JsonResponse:
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         anio = _int_param(request.GET.get("anio"), hoy.year) or hoy.year
         datos = FinanzasService.get_datos_graficos_anuales(anio)
         return JsonResponse(datos)
@@ -682,7 +683,7 @@ class AhorrosListView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
 
         anio = _int_param(self.request.GET.get("anio"), hoy.year) or hoy.year
 
@@ -703,31 +704,34 @@ class AhorrosListView(LoginRequiredMixin, TemplateView):
 
 
 class GuardarSaldoMensualHtmxView(LoginRequiredMixin, View):
-    """Guarda o actualiza de forma instantánea con HTMX el saldo de un mes concreto."""
+    """Guarda o actualiza de forma instantánea con HTMX el saldo de un mes concreto con validación estricta."""
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        cuenta_id = request.POST.get("cuenta_id")
-        anio = _int_param(request.POST.get("anio"), timezone.now().year) or timezone.now().year
-        mes = _int_param(request.POST.get("mes"), timezone.now().month, 1, 12) or timezone.now().month
+        hoy = timezone.localdate()
+        cuenta_id = _int_param(request.POST.get("cuenta_id"))
+        anio = _int_param(request.POST.get("anio"), hoy.year) or hoy.year
+        mes = _int_param(request.POST.get("mes"), hoy.month, 1, 12) or hoy.month
         saldo_str = request.POST.get("saldo", "").replace(",", ".").strip()
         notas = request.POST.get("notas", "").strip()
 
-        try:
-            cuenta = get_object_or_404(CuentaAhorro, id=cuenta_id)
+        if cuenta_id:
+            try:
+                cuenta = get_object_or_404(CuentaAhorro, id=cuenta_id)
 
-            if saldo_str == "":
-                # Si se deja en blanco, eliminar el registro
-                RegistroSaldoMensual.objects.filter(cuenta=cuenta, anio=anio, mes=mes).delete()
-            else:
-                saldo_dec = Decimal(saldo_str)
-                RegistroSaldoMensual.objects.update_or_create(
-                    cuenta=cuenta,
-                    anio=anio,
-                    mes=mes,
-                    defaults={"saldo": saldo_dec, "notas": notas},
-                )
-        except (ValueError, TypeError):
-            pass
+                if saldo_str == "":
+                    # Si se deja en blanco, eliminar el registro
+                    RegistroSaldoMensual.objects.filter(cuenta=cuenta, anio=anio, mes=mes).delete()
+                else:
+                    saldo_dec = Decimal(saldo_str)
+                    if saldo_dec >= Decimal("0.00"):
+                        RegistroSaldoMensual.objects.update_or_create(
+                            cuenta=cuenta,
+                            anio=anio,
+                            mes=mes,
+                            defaults={"saldo": saldo_dec, "notas": notas},
+                        )
+            except (ValueError, TypeError, InvalidOperation):
+                pass
 
         resumen_ahorros = FinanzasService.get_resumen_ahorros_anual(anio=anio)
         response = render(

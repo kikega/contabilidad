@@ -14,6 +14,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from seguros.forms import HistorialRenovacionSeguroForm, PagoSeguroGastoForm, SeguroForm
 from seguros.models import HistorialRenovacionSeguro, Seguro
+from seguros.services import SeguroService
 
 
 class SeguroListView(LoginRequiredMixin, ListView):
@@ -38,20 +39,10 @@ class SeguroListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         qs = self.get_queryset()
-        
-        coste_total_anual = qs.filter(activo=True).aggregate(
-            total=Sum("prima_actual")
-        )["total"] or Decimal("0.00")
-
-        # Conteo de seguros por estado
-        urgentes = [s for s in qs if s.activo and s.estado_vencimiento == "urgente"]
-        proximos = [s for s in qs if s.activo and s.estado_vencimiento == "proximo"]
+        kpis = SeguroService.get_kpis_seguros(qs)
 
         context.update({
-            "coste_total_anual": coste_total_anual,
-            "num_polizas": qs.filter(activo=True).count(),
-            "urgentes_count": len(urgentes),
-            "proximos_count": len(proximos),
+            **kpis,
             "ramos": Seguro.Ramo.choices,
         })
         return context
@@ -68,12 +59,12 @@ class SeguroDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         seguro = self.object
 
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         fecha_def = seguro.fecha_vencimiento if seguro.fecha_vencimiento and seguro.fecha_vencimiento.year == hoy.year else hoy
 
         context.update({
             "gastos_reales": seguro.get_gastos(),
-            "resumen_anual_gastos": seguro.get_resumen_gastos_anuales(),
+            "resumen_anual_gastos": SeguroService.get_resumen_gastos_anuales(seguro),
             "historial": seguro.historial.all().order_by("-ejercicio_anio"),
             "form_historial": HistorialRenovacionSeguroForm(),
             "form_pago": PagoSeguroGastoForm(initial={

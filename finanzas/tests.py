@@ -8,7 +8,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from finanzas.models import Categoria, Elemento, Gasto, Ingreso
+from finanzas.models import Categoria, CuentaAhorro, Elemento, Gasto, Ingreso, RegistroSaldoMensual
 from finanzas.services import FinanzasService
 from seguros.models import Seguro
 
@@ -282,7 +282,7 @@ class FinanzasIntegrationTests(TestCase):
 
     def test_get_anios_disponibles_fallback_empty(self) -> None:
         """Verifica que si no hay movimientos en la base de datos se devuelva al menos el año actual."""
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         anios = FinanzasService.get_anios_disponibles()
         self.assertEqual(anios, [hoy.year])
 
@@ -416,7 +416,7 @@ class FinanzasIntegrationTests(TestCase):
             elemento=elem,
             concepto="Compra",
             monto=Decimal("10.00"),
-            fecha=timezone.now().date(),
+            fecha=timezone.localdate(),
         )
 
         cuenta = CuentaAhorro.objects.create(
@@ -635,6 +635,96 @@ class FinanzasIntegrationTests(TestCase):
             [el["nombre"] for el in response.context["gasto_config"]["elementos_por_categoria"].get(str(cat.id), [])],
             ["Préstamo Coche"],
         )
+
+    def test_guardar_saldo_mensual_htmx_validacion_estricta(self) -> None:
+        """Verifica que el endpoint de guardar saldo rechace valores negativos o inválidos y acepte saldos válidos o borrado."""
+        user = Usuario.objects.create_user(email="ahorros_seguridad@familia.com", password="password123")
+        cuenta = CuentaAhorro.objects.create(
+            usuario=user,
+            nombre="Cuenta Seguridad",
+            entidad="Banco Test",
+        )
+
+        client = Client()
+        client.force_login(user)
+
+        url = reverse("finanzas:guardar_saldo_mes_htmx")
+
+        # 1. Guardar saldo válido positivo
+        res1 = client.post(url, {
+            "cuenta_id": cuenta.id,
+            "anio": 2026,
+            "mes": 3,
+            "saldo": "1500.50",
+            "notas": "Saldo marzo",
+        })
+        self.assertEqual(res1.status_code, 200)
+        reg = RegistroSaldoMensual.objects.filter(cuenta=cuenta, anio=2026, mes=3).first()
+        self.assertIsNotNone(reg)
+        self.assertEqual(reg.saldo, Decimal("1500.50"))
+
+        # 2. Intentar guardar saldo negativo (debe ser rechazado y no actualizar el valor)
+        res2 = client.post(url, {
+            "cuenta_id": cuenta.id,
+            "anio": 2026,
+            "mes": 3,
+            "saldo": "-350.00",
+            "notas": "Saldo negativo no permitido",
+        })
+        self.assertEqual(res2.status_code, 200)
+        reg.refresh_from_db()
+        self.assertEqual(reg.saldo, Decimal("1500.50"))  # Permanece sin alterar
+
+        # 3. Enviar string vacío (debe eliminar el registro)
+        res3 = client.post(url, {
+            "cuenta_id": cuenta.id,
+            "anio": 2026,
+            "mes": 3,
+            "saldo": "",
+            "notas": "",
+        })
+        self.assertEqual(res3.status_code, 200)
+        self.assertFalse(RegistroSaldoMensual.objects.filter(cuenta=cuenta, anio=2026, mes=3).exists())
+
+    def test_elemento_mes_detalle_modal_muestra_concepto_y_elemento(self) -> None:
+        """Verifica que el popup modal de apuntes del mes muestre el concepto específico del gasto junto a su elemento."""
+        user = Usuario.objects.create_user(email="modal_concepto@familia.com", password="password123")
+        cat = Categoria.objects.create(nombre="Ocio y Restauración", tipo=Categoria.Tipo.GASTO)
+        elem = Elemento.objects.create(categoria=cat, nombre="Restaurantes")
+        
+        gasto = Gasto.objects.create(
+            usuario=user,
+            elemento=elem,
+            concepto="Cena Aniversario Especial",
+            monto=Decimal("85.50"),
+            fecha=timezone.localdate().replace(day=10),
+            es_fijo=False,
+            notas="Mesa reservada en la terraza",
+        )
+
+        client = Client()
+        client.force_login(user)
+
+        hoy = timezone.localdate()
+        url = reverse("finanzas:elemento_mes_detalle_htmx")
+        response = client.get(
+            url,
+            {
+                "elemento_id": elem.id,
+                "anio": hoy.year,
+                "mes": hoy.month,
+                "tipo": "gasto",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+        self.assertEqual(response.status_code, 200)
+        # Debe contener tanto el concepto específico como el nombre del elemento y las notas
+        self.assertContains(response, "Cena Aniversario Especial")
+        self.assertContains(response, "Restaurantes")
+        self.assertContains(response, "85,50")
+        self.assertContains(response, "Mesa reservada en la terraza")
+
+
 
 
 

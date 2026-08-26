@@ -65,3 +65,71 @@ class UsuarioModelTests(TestCase):
                 password="Password123!",
                 is_superuser=False,
             )
+
+
+class LoginRateLimitSecurityTests(TestCase):
+    """Pruebas de seguridad contra ataques de fuerza bruta en el endpoint de autenticación."""
+
+    def setUp(self) -> None:
+        from django.core.cache import cache
+        cache.clear()
+        self.email = "seguro@familia.com"
+        self.password = "PasswordSeguro123!"
+        self.user = Usuario.objects.create_user(
+            email=self.email,
+            password=self.password,
+        )
+
+    def tearDown(self) -> None:
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_login_exitoso(self) -> None:
+        """Verifica que las credenciales correctas permitan iniciar sesión normalmente."""
+        from django.urls import reverse
+        response = self.client.post(
+            reverse("usuarios:login"),
+            {"username": self.email, "password": self.password},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("finanzas:dashboard"))
+
+    def test_bloqueo_por_fuerza_bruta_tras_multiples_fallos(self) -> None:
+        """Verifica que tras 5 intentos fallidos consecutivos se bloquee temporalmente el acceso."""
+        from django.urls import reverse
+        from usuarios.views import MAX_LOGIN_ATTEMPTS
+
+        # Realizar 5 intentos fallidos
+        for i in range(MAX_LOGIN_ATTEMPTS):
+            res = self.client.post(
+                reverse("usuarios:login"),
+                {"username": self.email, "password": "PasswordIncorrecta!"},
+            )
+            self.assertEqual(res.status_code, 200)
+
+        # El 6º intento (incluso con contraseña correcta) debe ser bloqueado por rate limit
+        res_bloqueado = self.client.post(
+            reverse("usuarios:login"),
+            {"username": self.email, "password": self.password},
+        )
+        self.assertEqual(res_bloqueado.status_code, 200)
+        self.assertContains(res_bloqueado, "Demasiados intentos fallidos")
+        self.assertContains(res_bloqueado, "bloqueado temporalmente")
+
+    def test_login_exitoso_limpia_intentos_fallidos(self) -> None:
+        """Verifica que un login válido tras un fallo limpie el contador en caché."""
+        from django.urls import reverse
+
+        # 1 intento fallido
+        self.client.post(
+            reverse("usuarios:login"),
+            {"username": self.email, "password": "PasswordIncorrecta!"},
+        )
+
+        # Login correcto
+        res_ok = self.client.post(
+            reverse("usuarios:login"),
+            {"username": self.email, "password": self.password},
+        )
+        self.assertEqual(res_ok.status_code, 302)
+

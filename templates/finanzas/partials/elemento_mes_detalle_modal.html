@@ -28,44 +28,64 @@
       {% if items %}
       <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
         {% for item in items %}
-        <div class="py-3 flex items-center justify-between gap-3">
-          <div class="space-y-0.5">
-            <div class="text-xs font-bold text-slate-800 dark:text-slate-200">
-              {{ item.descripcion|default:elemento.nombre }}
+        <div class="py-3.5 flex items-center justify-between gap-3">
+          <div class="space-y-1 flex-1 min-w-0">
+            <!-- Concepto / Descripción principal -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs font-bold text-slate-900 dark:text-white truncate">
+                {% if tipo == 'gasto' %}
+                  {{ item.concepto|default:elemento.nombre }}
+                {% else %}
+                  {{ item.descripcion|default:elemento.nombre }}
+                {% endif %}
+              </span>
+              {% if item.es_fijo %}
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                Fijo
+              </span>
+              {% endif %}
             </div>
-            <div class="text-[11px] text-slate-400 flex items-center space-x-2">
+
+            <!-- Metadatos: Elemento/Subcategoría, Fecha y Titular -->
+            <div class="text-[11px] text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span class="font-medium text-slate-500 dark:text-slate-400">{{ elemento.nombre }}</span>
+              <span>&bull;</span>
               <span>{{ item.fecha|date:"d M Y" }}</span>
               <span>&bull;</span>
               <span>Por: {{ item.usuario.get_short_name|default:"Titular" }}</span>
             </div>
+
+            <!-- Notas u Observaciones si existen -->
             {% if item.notas %}
-            <p class="text-[10px] text-slate-400 italic">{{ item.notas }}</p>
+            <p class="text-[10px] text-slate-500 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-800/40 px-2 py-1 rounded-md mt-1 border border-slate-100 dark:border-slate-800/60">
+              {{ item.notas }}
+            </p>
             {% endif %}
           </div>
 
-          <div class="flex items-center space-x-3">
+          <div class="flex items-center space-x-3 shrink-0">
             <span class="text-sm font-black {% if tipo == 'ingreso' %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
               {% if tipo == 'ingreso' %}+{% else %}-{% endif %}{{ item.monto|floatformat:2 }} €
             </span>
 
             <div class="flex items-center space-x-1">
               {% if tipo == 'ingreso' %}
-              <a href="{% url 'finanzas:ingreso_update' item.id %}" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors" title="Editar">
+              <a href="{% url 'finanzas:ingreso_update' item.id %}" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors" title="Editar apunte" aria-label="Editar apunte de {{ item.descripcion|default:elemento.nombre }}">
                 <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
               </a>
               <form method="POST" action="{% url 'finanzas:ingreso_delete' item.id %}" onsubmit="return confirm('¿Eliminar este apunte?');" class="inline">
                 {% csrf_token %}
-                <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer" title="Eliminar">
+                <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer" title="Eliminar apunte" aria-label="Eliminar apunte de {{ item.descripcion|default:elemento.nombre }}">
                   <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                 </button>
               </form>
               {% else %}
-              <a href="{% url 'finanzas:gasto_update' item.id %}" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors" title="Editar">
+              <a href="{% url 'finanzas:gasto_update' item.id %}" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors" title="Editar apunte" aria-label="Editar apunte: {{ item.concepto|default:elemento.nombre }}">
                 <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
               </a>
               <form method="POST" action="{% url 'finanzas:gasto_delete' item.id %}" onsubmit="return confirm('¿Eliminar este apunte?');" class="inline">
                 {% csrf_token %}
-                <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer" title="Eliminar">
+                <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer" title="Eliminar apunte" aria-label="Eliminar apunte: {{ item.concepto|default:elemento.nombre }}">
                   <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                 </button>
               </form>

@@ -225,7 +225,7 @@ class GastoForm(forms.ModelForm):
             cleaned["es_fijo"] = True
 
         if not concepto:
-            fecha = cleaned.get("fecha") or timezone.now().date()
+            fecha = cleaned.get("fecha") or timezone.localdate()
             anio, mes = fecha.year, fecha.month
             if es_tarjeta:
                 if fecha.day == 1:

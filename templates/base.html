@@ -8,7 +8,7 @@
 
   <!-- Tailwind CSS v4: en desarrollo se usa el runtime del navegador; en producción el CSS compilado -->
   {% if debug %}
-  <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+  <script src="{% static 'vendor/tailwindcss-browser.js' %}"></script>
   <style type="text/tailwindcss">
     @theme {
       --color-cyan-50: #ECFEFF;
@@ -31,10 +31,10 @@
   <!-- Estilos Custom y Tema -->
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 
-  <!-- HTMX & Chart.js & Lucide Icons -->
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Librerías de Terceros (Self-Hosted en static/vendor) -->
+  <script src="{% static 'vendor/htmx.min.js' %}"></script>
+  <script src="{% static 'vendor/chart.umd.min.js' %}"></script>
+  <script src="{% static 'vendor/lucide.min.js' %}"></script>
 
   <!-- Dark Mode Script inicial (evita flash blanco) -->
   <script>
@@ -131,14 +131,14 @@
 
   <!-- Feedback Messages / Toasts -->
   {% if messages %}
-  <div class="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 mt-4 w-full">
+  <div id="toast-container" class="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 mt-4 w-full space-y-3">
     {% for message in messages %}
-    <div class="p-4 mb-3 rounded-xl border flex items-center justify-between text-sm shadow-sm animate-fade-in {% if message.tags == 'success' %}bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300{% elif message.tags == 'error' %}bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300{% else %}bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800 text-cyan-800 dark:text-cyan-300{% endif %}">
+    <div class="toast-item p-4 rounded-xl border flex items-center justify-between text-sm shadow-sm animate-fade-in transition-all duration-300 {% if message.tags == 'success' %}bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300{% elif message.tags == 'error' %}bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300{% else %}bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800 text-cyan-800 dark:text-cyan-300{% endif %}" role="alert">
       <div class="flex items-center space-x-2.5">
-        <i data-lucide="info" class="w-4 h-4"></i>
+        <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
         <span>{{ message }}</span>
       </div>
-      <button onclick="this.parentElement.remove()" class="text-current opacity-60 hover:opacity-100">
+      <button onclick="dismissToast(this.closest('.toast-item'))" aria-label="Cerrar notificación" class="text-current opacity-60 hover:opacity-100 p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer ml-3">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -205,6 +205,28 @@
       if (e.target === this) {
         this.classList.add('hidden');
       }
+    });
+
+    // Auto-cierre y animación de notificaciones Toast
+    function dismissToast(el) {
+      if (!el) return;
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(-8px)';
+      setTimeout(() => {
+        el.remove();
+        const container = document.getElementById('toast-container');
+        if (container && container.children.length === 0) {
+          container.remove();
+        }
+      }, 300);
+    }
+
+    document.querySelectorAll('.toast-item').forEach(toast => {
+      let timeoutId = setTimeout(() => dismissToast(toast), 4000);
+      toast.addEventListener('mouseenter', () => clearTimeout(timeoutId));
+      toast.addEventListener('mouseleave', () => {
+        timeoutId = setTimeout(() => dismissToast(toast), 2000);
+      });
     });
 
     // Re-ejecutar renderizado de Lucide icons tras cada swap de HTMX

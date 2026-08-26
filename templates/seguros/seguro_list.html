@@ -154,15 +154,15 @@
 
             <!-- Acciones -->
             <td class="px-6 py-4 whitespace-nowrap text-right space-x-1">
-              <a href="{% url 'seguros:seguro_detail' seguro.id %}" title="Ver Estudio & Historial" class="p-1.5 rounded-lg text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
+              <a href="{% url 'seguros:seguro_detail' seguro.id %}" title="Ver Estudio & Historial" aria-label="Ver estudio e historial de {{ seguro.compania }} {{ seguro.bien_asegurado }}" class="p-1.5 rounded-lg text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
                 <i data-lucide="eye" class="w-3.5 h-3.5"></i>
               </a>
-              <a href="{% url 'seguros:seguro_update' seguro.id %}" title="Editar" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 inline-block transition-colors">
+              <a href="{% url 'seguros:seguro_update' seguro.id %}" title="Editar" aria-label="Editar póliza {{ seguro.compania }} {{ seguro.bien_asegurado }}" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 inline-block transition-colors">
                 <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
               </a>
               <form method="POST" action="{% url 'seguros:seguro_delete' seguro.id %}" class="inline-block" onsubmit="return confirm('¿Eliminar póliza de seguro?');">
                 {% csrf_token %}
-                <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors">
+                <button type="submit" aria-label="Eliminar póliza {{ seguro.compania }} {{ seguro.bien_asegurado }}" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer">
                   <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                 </button>
               </form>

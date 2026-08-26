@@ -120,10 +120,10 @@
             <a href="{% url 'finanzas:elemento_create' %}?categoria={{ cat.id }}" class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium text-cyan-700 dark:text-cyan-300 bg-cyan-100/60 dark:bg-cyan-950/60 hover:bg-cyan-200/60 transition-colors">
               <i data-lucide="plus" class="w-3 h-3 mr-1"></i> Añadir Elemento
             </a>
-            <a href="{% url 'finanzas:categoria_update' cat.id %}" title="Editar Categoría" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-white dark:hover:bg-slate-800 transition-colors">
+            <a href="{% url 'finanzas:categoria_update' cat.id %}" title="Editar Categoría" aria-label="Editar categoría {{ cat.nombre }}" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-white dark:hover:bg-slate-800 transition-colors">
               <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
             </a>
-            <a href="{% url 'finanzas:categoria_delete' cat.id %}" title="Eliminar Categoría" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white dark:hover:bg-slate-800 transition-colors">
+            <a href="{% url 'finanzas:categoria_delete' cat.id %}" title="Eliminar Categoría" aria-label="Eliminar categoría {{ cat.nombre }}" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white dark:hover:bg-slate-800 transition-colors">
               <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
             </a>
           </div>
@@ -138,10 +138,10 @@
             <span class="text-[10px] text-slate-400">({{ elem.ingresos.all|length }} apuntes)</span>
             
             <div class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1 pl-1">
-              <a href="{% url 'finanzas:elemento_update' elem.id %}" title="Editar elemento" class="text-slate-400 hover:text-cyan-600">
+              <a href="{% url 'finanzas:elemento_update' elem.id %}" title="Editar elemento" aria-label="Editar elemento {{ elem.nombre }}" class="text-slate-400 hover:text-cyan-600">
                 <i data-lucide="pencil" class="w-3 h-3"></i>
               </a>
-              <a href="{% url 'finanzas:elemento_delete' elem.id %}" title="Eliminar elemento" class="text-slate-400 hover:text-rose-600">
+              <a href="{% url 'finanzas:elemento_delete' elem.id %}" title="Eliminar elemento" aria-label="Eliminar elemento {{ elem.nombre }}" class="text-slate-400 hover:text-rose-600">
                 <i data-lucide="trash-2" class="w-3 h-3"></i>
               </a>
             </div>
@@ -232,10 +232,10 @@
               <i data-lucide="minus-circle" class="w-3.5 h-3.5 mr-1"></i>
               <span>Registrar Gasto</span>
             </a>
-            <a href="{% url 'finanzas:categoria_update' cat.id %}" title="Editar categoría" class="p-2 rounded-xl text-slate-500 hover:text-cyan-600 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors">
+            <a href="{% url 'finanzas:categoria_update' cat.id %}" title="Editar categoría" aria-label="Editar categoría {{ cat.nombre }}" class="p-2 rounded-xl text-slate-500 hover:text-cyan-600 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors">
               <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
             </a>
-            <a href="{% url 'finanzas:categoria_delete' cat.id %}" title="Eliminar categoría" class="p-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors">
+            <a href="{% url 'finanzas:categoria_delete' cat.id %}" title="Eliminar categoría" aria-label="Eliminar categoría {{ cat.nombre }}" class="p-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-white dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors">
               <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
             </a>
           </div>
@@ -309,13 +309,13 @@
                     {{ elem.descripcion|default:"-" }}
                   </td>
                   <td class="px-5 py-3.5 whitespace-nowrap text-right space-x-1">
-                    <a href="{% url 'finanzas:gasto_create' %}?elemento={{ elem.id }}" title="Registrar gasto con este elemento" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">
+                    <a href="{% url 'finanzas:gasto_create' %}?elemento={{ elem.id }}" title="Registrar gasto con este elemento" aria-label="Registrar gasto para {{ elem.nombre }}" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">
                       <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
                     </a>
-                    <a href="{% url 'finanzas:elemento_update' elem.id %}" title="Editar elemento" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
+                    <a href="{% url 'finanzas:elemento_update' elem.id %}" title="Editar elemento" aria-label="Editar elemento {{ elem.nombre }}" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
                       <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
                     </a>
-                    <a href="{% url 'finanzas:elemento_delete' elem.id %}" title="Eliminar elemento" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">
+                    <a href="{% url 'finanzas:elemento_delete' elem.id %}" title="Eliminar elemento" aria-label="Eliminar elemento {{ elem.nombre }}" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">
                       <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                     </a>
                   </td>
@@ -379,10 +379,10 @@
                       -{{ gasto.monto|floatformat:2 }} €
                     </td>
                     <td class="px-5 py-3 whitespace-nowrap text-right space-x-1">
-                      <a href="{% url 'finanzas:gasto_update' gasto.id %}" title="Editar apunte" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
+                      <a href="{% url 'finanzas:gasto_update' gasto.id %}" title="Editar apunte" aria-label="Editar apunte {{ gasto.concepto }}" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
                         <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
                       </a>
-                      <a href="{% url 'finanzas:gasto_delete' gasto.id %}" title="Eliminar apunte" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">
+                      <a href="{% url 'finanzas:gasto_delete' gasto.id %}" title="Eliminar apunte" aria-label="Eliminar apunte {{ gasto.concepto }}" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">
                         <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                       </a>
                     </td>

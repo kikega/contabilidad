@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Página no encontrada (404) - Gestión Económica Familiar{% endblock %}
+
+{% block content %}
+<div class="min-h-[60vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-md w-full text-center space-y-6 bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl shadow-xl border border-slate-200/80 dark:border-slate-800 animate-fade-in">
+    
+    <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-600 via-cyan-500 to-cyan-300 mx-auto flex items-center justify-center text-white shadow-lg shadow-cyan-500/30">
+      <i data-lucide="compass" class="w-8 h-8"></i>
+    </div>
+
+    <div>
+      <span class="text-xs font-black uppercase tracking-widest text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/60 px-3 py-1 rounded-full border border-cyan-200 dark:border-cyan-800">
+        Error 404
+      </span>
+      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white mt-3">
+        Página no encontrada
+      </h1>
+      <p class="mt-2 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+        La ruta a la que intentas acceder no existe, ha sido movida o la dirección es incorrecta.
+      </p>
+    </div>
+
+    <div class="pt-2">
+      <a href="{% url 'finanzas:dashboard' %}" class="inline-flex items-center justify-center px-6 py-3 rounded-2xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-600 shadow-md shadow-cyan-600/30 transition-all cursor-pointer">
+        <i data-lucide="layout-dashboard" class="w-4 h-4 mr-2"></i>
+        <span>Volver al Dashboard</span>
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

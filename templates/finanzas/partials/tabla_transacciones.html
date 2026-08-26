@@ -68,14 +68,14 @@
         <!-- Acciones -->
         <td class="px-6 py-4 whitespace-nowrap text-right text-xs font-medium space-x-1">
           {% if mov.edit_url %}
-          <a href="{{ mov.edit_url }}" title="Editar" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
+          <a href="{{ mov.edit_url }}" title="Editar" aria-label="Editar movimiento {{ mov.concepto }}" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
             <i data-lucide="pencil" class="w-4 h-4"></i>
           </a>
           {% endif %}
           {% if mov.delete_url %}
           <form method="POST" action="{{ mov.delete_url }}" class="inline-block" onsubmit="return confirm('¿Estás seguro de eliminar este registro?');">
             {% csrf_token %}
-            <button type="submit" title="Eliminar" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer">
+            <button type="submit" title="Eliminar" aria-label="Eliminar movimiento {{ mov.concepto }}" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer">
               <i data-lucide="trash-2" class="w-4 h-4"></i>
             </button>
           </form>

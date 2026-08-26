@@ -23,10 +23,10 @@
               </div>
             </div>
             <div class="ml-auto flex items-center space-x-1">
-              <a href="{% url 'finanzas:cuenta_ahorro_update' fila.cuenta.id %}" title="Editar configuración de cuenta" class="p-1 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
+              <a href="{% url 'finanzas:cuenta_ahorro_update' fila.cuenta.id %}" title="Editar configuración de cuenta" aria-label="Editar cuenta {{ fila.cuenta.nombre }}" class="p-1 rounded-lg text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-block transition-colors">
                 <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
               </a>
-              <a href="{% url 'finanzas:cuenta_ahorro_delete' fila.cuenta.id %}" title="Eliminar cuenta" class="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">
+              <a href="{% url 'finanzas:cuenta_ahorro_delete' fila.cuenta.id %}" title="Eliminar cuenta" aria-label="Eliminar cuenta {{ fila.cuenta.nombre }}" class="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-block transition-colors">
                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
               </a>
             </div>
@@ -62,7 +62,8 @@
           <button
             type="button"
             onclick="abrirModalSaldo('{{ celda.cuenta_id }}', '{{ resumen.anio }}', '{{ celda.mes }}', '{{ celda.saldo }}', '{{ celda.notas|escapejs }}')"
-            class="group/btn w-full text-right px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-cyan-50 dark:hover:bg-cyan-950/60 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-200 dark:hover:border-cyan-800 border border-transparent transition-all inline-flex items-center justify-end space-x-1 cursor-pointer"
+            aria-label="Editar saldo de {{ celda.cuenta_nombre|default:'cuenta' }} en {{ row.nombre }} {{ resumen.anio }}: {{ celda.saldo|floatformat:2 }} €"
+            class="group/btn w-full text-right px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-cyan-50 dark:hover:bg-cyan-950/60 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-200 dark:border-cyan-800 border border-transparent transition-all inline-flex items-center justify-end space-x-1 cursor-pointer"
             title="{{ row.nombre }} {{ resumen.anio }}: {{ celda.saldo|floatformat:2 }} €{% if celda.notas %} - {{ celda.notas }}{% endif %}"
           >
             <span>{{ celda.saldo|floatformat:2 }} €</span>
@@ -72,6 +73,7 @@
           <button
             type="button"
             onclick="abrirModalSaldo('{{ celda.cuenta_id }}', '{{ resumen.anio }}', '{{ celda.mes }}', '', '')"
+            aria-label="Añadir saldo para {{ celda.cuenta_nombre|default:'cuenta' }} en {{ row.nombre }} {{ resumen.anio }}"
             class="w-full text-right px-2.5 py-1.5 rounded-xl text-xs text-slate-300 dark:text-slate-600 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
             title="Añadir saldo de {{ row.nombre }} {{ resumen.anio }}"
           >

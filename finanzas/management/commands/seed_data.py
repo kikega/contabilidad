@@ -236,7 +236,7 @@ class Command(BaseCommand):
 
         # 3. Generar Histórico de Movimientos para 2025 y 2026
         anios = [2025, 2026]
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
 
         for anio in anios:
             limite_mes = 12 if anio < hoy.year else hoy.month

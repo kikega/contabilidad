@@ -34,7 +34,7 @@ class FinanzasService:
     @classmethod
     def get_anios_disponibles(cls, usuario_id: Optional[int] = None) -> List[int]:
         """Obtiene la lista ordenada de años para los que existen datos contables registrados."""
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
 
         filtro_ing = Q()
         filtro_gas = Q()
@@ -81,7 +81,7 @@ class FinanzasService:
         mes: Optional[int] = None
     ) -> Tuple[date, date, int, Optional[int]]:
         """Determina el rango de fechas para filtrado."""
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         anio_actual = anio or hoy.year
         
         if mes:
@@ -489,7 +489,7 @@ class FinanzasService:
         usuario_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Calcula la matriz de saldos mensuales, totales, evoluciones y métricas para las cuentas de ahorro."""
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
 
         filtro_cuenta = Q(activo=True)
         if usuario_id:
