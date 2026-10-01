@@ -3,7 +3,7 @@
 
   <!-- 1. RESUMEN GLOBAL DEL EJERCICIO (INGRESOS, GASTOS Y BALANCE MES A MES) -->
   <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
-    <div class="p-5 sm:p-6 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30">
+    <div class="p-5 sm:p-6 border-b border-slate-200/80 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-slate-50/50 dark:bg-slate-800/30">
       <div class="flex items-center space-x-3">
         <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 to-cyan-400 flex items-center justify-center text-white shadow-xs">
           <i data-lucide="calculator" class="w-5 h-5"></i>
@@ -16,8 +16,8 @@
         </div>
       </div>
 
-      <!-- Métricas rápidas anuales -->
-      <div class="flex flex-wrap items-center gap-3 text-xs font-bold">
+      <!-- Métricas rápidas anuales y botón de gráfico -->
+      <div class="flex flex-wrap items-center gap-2.5 text-xs font-bold">
         <span class="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
           Ingresos: +{{ resumen_anual.total_anual_ingresos|floatformat:2 }} €
         </span>
@@ -27,8 +27,40 @@
         <span class="px-3 py-1.5 rounded-xl {% if resumen_anual.balance_anual >= 0 %}bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800{% else %}bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800{% endif %}">
           Balance: {% if resumen_anual.balance_anual > 0 %}+{% endif %}{{ resumen_anual.balance_anual|floatformat:2 }} € ({{ resumen_anual.ratio_ahorro_anual }}% ahorro)
         </span>
+        
+        <button 
+          id="btn-toggle-grafico" 
+          type="button" 
+          onclick="toggleGraficoAnual()"
+          class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors shadow-2xs cursor-pointer"
+          title="Mostrar / ocultar gráfica mensual de ingresos, gastos y balance"
+        >
+          <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 mr-1.5 text-cyan-500"></i>
+          <span id="texto-toggle-grafico">Ver Gráfica</span>
+        </button>
       </div>
     </div>
+
+    <!-- Contenedor Colapsable de Gráfica Resumen Anual -->
+    <div id="grafico-anual-container" class="hidden p-5 sm:p-6 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-900/60">
+      <div class="flex items-center justify-between mb-3 text-xs text-slate-500 dark:text-slate-400">
+        <span class="font-semibold uppercase tracking-wider text-[11px]">Evolución Mensual del Ejercicio {{ resumen_anual.anio }}</span>
+        <span class="text-[11px]">Ingresos vs Gastos vs Balance</span>
+      </div>
+      <div class="h-64 sm:h-72 w-full">
+        <canvas id="chartCuentasAnual"></canvas>
+      </div>
+    </div>
+
+    <!-- Datos JSON para Chart.js -->
+    <script id="cuentas-chart-data" type="application/json">
+    {
+      "labels": ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
+      "ingresos": [{% for item in resumen_anual.resumen_global_meses %}{{ item.ingresos|stringformat:".2f" }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+      "gastos": [{% for item in resumen_anual.resumen_global_meses %}{{ item.gastos|stringformat:".2f" }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+      "balances": [{% for item in resumen_anual.resumen_global_meses %}{{ item.balance|stringformat:".2f" }}{% if not forloop.last %}, {% endif %}{% endfor %}]
+    }
+    </script>
 
     <!-- Tabla de Totales Mensuales Globales -->
     <div class="overflow-x-auto scrollbar-thin">
@@ -39,7 +71,17 @@
               Concepto Global
             </th>
             {% for abrev in resumen_anual.meses_abrev %}
-            <th class="px-3 py-3 text-right min-w-[95px]">{{ abrev }}</th>
+            <th 
+              class="px-3 py-3 text-right min-w-[95px] {% if resumen_anual.es_anio_actual and forloop.counter == resumen_anual.mes_actual %}bg-cyan-100/70 dark:bg-cyan-950/70 text-cyan-800 dark:text-cyan-200 font-extrabold border-x-2 border-cyan-400 dark:border-cyan-600{% endif %}" 
+              data-col-mes="{{ forloop.counter }}"
+            >
+              <div class="flex flex-col items-end">
+                <span>{{ abrev }}</span>
+                {% if resumen_anual.es_anio_actual and forloop.counter == resumen_anual.mes_actual %}
+                <span class="text-[8px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-tighter -mt-0.5">Actual</span>
+                {% endif %}
+              </div>
+            </th>
             {% endfor %}
             <th class="px-4 py-3 text-right min-w-[125px] font-black text-slate-900 dark:text-white bg-slate-100/60 dark:bg-slate-800/80">
               Total {{ resumen_anual.anio }}
@@ -55,7 +97,10 @@
               <span>Total Ingresos</span>
             </td>
             {% for item in resumen_anual.resumen_global_meses %}
-            <td class="px-3 py-3 text-right whitespace-nowrap font-bold {% if item.ingresos > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-300 dark:text-slate-600{% endif %}">
+            <td 
+              class="px-3 py-3 text-right whitespace-nowrap font-bold {% if item.ingresos > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-300 dark:text-slate-600{% endif %} {% if resumen_anual.es_anio_actual and item.mes == resumen_anual.mes_actual %}bg-cyan-50/60 dark:bg-cyan-950/30 border-x border-cyan-200/50 dark:border-cyan-800/40{% endif %}"
+              data-col-mes="{{ item.mes }}"
+            >
               {% if item.ingresos > 0 %}+{{ item.ingresos|floatformat:2 }} €{% else %}—{% endif %}
             </td>
             {% endfor %}
@@ -71,7 +116,10 @@
               <span>Total Gastos</span>
             </td>
             {% for item in resumen_anual.resumen_global_meses %}
-            <td class="px-3 py-3 text-right whitespace-nowrap font-bold {% if item.gastos > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-300 dark:text-slate-600{% endif %}">
+            <td 
+              class="px-3 py-3 text-right whitespace-nowrap font-bold {% if item.gastos > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-300 dark:text-slate-600{% endif %} {% if resumen_anual.es_anio_actual and item.mes == resumen_anual.mes_actual %}bg-cyan-50/60 dark:bg-cyan-950/30 border-x border-cyan-200/50 dark:border-cyan-800/40{% endif %}"
+              data-col-mes="{{ item.mes }}"
+            >
               {% if item.gastos > 0 %}-{{ item.gastos|floatformat:2 }} €{% else %}—{% endif %}
             </td>
             {% endfor %}
@@ -87,7 +135,10 @@
               <span>Balance Neto</span>
             </td>
             {% for item in resumen_anual.resumen_global_meses %}
-            <td class="px-3 py-3.5 text-right whitespace-nowrap font-black {% if item.balance > 0 %}text-cyan-600 dark:text-cyan-400{% elif item.balance < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-400{% endif %}">
+            <td 
+              class="px-3 py-3.5 text-right whitespace-nowrap font-black {% if item.balance > 0 %}text-cyan-600 dark:text-cyan-400{% elif item.balance < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-400{% endif %} {% if resumen_anual.es_anio_actual and item.mes == resumen_anual.mes_actual %}bg-cyan-100/50 dark:bg-cyan-950/50 border-x border-cyan-300/50 dark:border-cyan-800/50{% endif %}"
+              data-col-mes="{{ item.mes }}"
+            >
               {% if item.balance != 0 %}{% if item.balance > 0 %}+{% endif %}{{ item.balance|floatformat:2 }} €{% else %}0.00 €{% endif %}
             </td>
             {% endfor %}
@@ -104,21 +155,35 @@
 
   <!-- 2. SECCIÓN: CATEGORÍAS DE INGRESOS -->
   <div class="space-y-6">
-    <div class="flex items-center space-x-2.5">
-      <div class="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div>
-      <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">
-        Categorías de Ingresos ({{ resumen_anual.anio }})
-      </h2>
+    <div class="flex items-center justify-between pb-1">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div>
+        <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">
+          Categorías de Ingresos ({{ resumen_anual.anio }})
+        </h2>
+        <span class="text-xs text-slate-400 font-normal">({{ resumen_anual.desglose_ingresos|length }} categorías)</span>
+      </div>
     </div>
 
     {% for cat_data in resumen_anual.desglose_ingresos %}
-    <!-- Caja de Categoría de Ingreso -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+    <!-- Caja de Categoría de Ingreso (Acordeón Plegable) -->
+    <div 
+      class="categoria-card bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden transition-all duration-200"
+      data-cat-nombre="{{ cat_data.categoria.nombre|lower }}"
+    >
       
-      <!-- Encabezado de la Categoría -->
-      <div class="p-4 sm:p-5 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/40 dark:bg-slate-800/20">
+      <!-- Encabezado de la Categoría (Clic para Colapsar/Expandir) -->
+      <div 
+        onclick="toggleCategoria('cat-body-ingreso-{{ cat_data.categoria.id }}', this)"
+        class="p-4 sm:p-5 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/40 dark:bg-slate-800/20 cursor-pointer select-none hover:bg-slate-100/60 dark:hover:bg-slate-800/50 transition-colors group"
+        title="Clic para desplegar u ocultar los elementos de esta categoría"
+      >
         <div class="flex items-center space-x-3">
-          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-xs" style="background-color: {{ cat_data.categoria.color }};">
+          <div class="cat-chevron w-5 h-5 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-transform duration-200">
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+          </div>
+
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-xs shrink-0" style="background-color: {{ cat_data.categoria.color }};">
             <i data-lucide="{{ cat_data.categoria.icono|default:'folder' }}" class="w-4 h-4"></i>
           </div>
           <div>
@@ -130,7 +195,7 @@
           </div>
         </div>
 
-        <div class="flex items-center space-x-2.5">
+        <div class="flex items-center space-x-2.5" onclick="event.stopPropagation()">
           <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1 rounded-xl border border-emerald-200 dark:border-emerald-800">
             Total Anual: +{{ cat_data.total_anual|floatformat:2 }} €
           </span>
@@ -141,93 +206,112 @@
       </div>
 
       <!-- Tabla de 12 Meses para esta Categoría -->
-      <div class="overflow-x-auto scrollbar-thin">
-        <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
-          <thead class="bg-slate-50/60 dark:bg-slate-800/40 text-slate-400 font-semibold uppercase tracking-wider">
-            <tr>
-              <th class="px-4 py-2.5 sticky left-0 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm min-w-[200px]">
-                Elemento / Concepto
-              </th>
-              {% for abrev in resumen_anual.meses_abrev %}
-              <th class="px-3 py-2.5 text-right min-w-[95px]">{{ abrev }}</th>
-              {% endfor %}
-              <th class="px-4 py-2.5 text-right min-w-[120px] font-bold text-slate-700 dark:text-slate-200 bg-slate-100/50 dark:bg-slate-800/60">
-                Total Anual
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-200/60 dark:divide-slate-800/60 font-medium">
-            {% for elem_data in cat_data.elementos %}
-            <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
-              
-              <!-- Elemento Nombre e Icono -->
-              <td class="px-4 py-2.5 whitespace-nowrap sticky left-0 z-10 bg-white/95 dark:bg-slate-900/95 group-hover:bg-slate-50/95 dark:group-hover:bg-slate-800/95 border-r border-slate-200/60 dark:border-slate-800/60">
-                <div class="flex items-center space-x-2.5">
-                  <span class="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                    <i data-lucide="{{ elem_data.elemento.icono_efectivo|default:'tag' }}" class="w-3.5 h-3.5"></i>
-                  </span>
-                  <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">{{ elem_data.elemento.nombre }}</span>
-                </div>
-              </td>
-
-              <!-- 12 Celdas de Meses -->
-              {% for m in elem_data.meses %}
-              <td class="px-2 py-2 text-right whitespace-nowrap">
-                {% if m.total > 0 %}
-                <button
-                  type="button"
-                  onclick="mostrarDetalleApuntes('{{ elem_data.elemento.nombre|escapejs }}', '{{ m.mes }}', '{{ resumen_anual.anio }}', 'ingreso', '{{ elem_data.elemento.id }}')"
-                  class="group/cell px-2 py-1 rounded-lg text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors inline-flex items-center space-x-1 cursor-pointer"
-                  title="{{ m.count }} apunte(s) en mes {{ m.mes }}/{{ resumen_anual.anio }}"
+      <div id="cat-body-ingreso-{{ cat_data.categoria.id }}" class="cat-content-body transition-all duration-200">
+        <div class="overflow-x-auto scrollbar-thin">
+          <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
+            <thead class="bg-slate-50/60 dark:bg-slate-800/40 text-slate-400 font-semibold uppercase tracking-wider">
+              <tr>
+                <th class="px-4 py-2.5 sticky left-0 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm min-w-[200px]">
+                  Elemento / Concepto
+                </th>
+                {% for abrev in resumen_anual.meses_abrev %}
+                <th 
+                  class="px-3 py-2.5 text-right min-w-[95px] {% if resumen_anual.es_anio_actual and forloop.counter == resumen_anual.mes_actual %}bg-cyan-100/70 dark:bg-cyan-950/70 text-cyan-800 dark:text-cyan-200 font-extrabold border-x border-cyan-300 dark:border-cyan-700{% endif %}"
+                  data-col-mes="{{ forloop.counter }}"
                 >
-                  <span>+{{ m.total|floatformat:2 }} €</span>
-                  {% if m.count > 1 %}
-                  <span class="text-[9px] px-1 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-extrabold">{{ m.count }}</span>
+                  {{ abrev }}
+                </th>
+                {% endfor %}
+                <th class="px-4 py-2.5 text-right min-w-[120px] font-bold text-slate-700 dark:text-slate-200 bg-slate-100/50 dark:bg-slate-800/60">
+                  Total Anual
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200/60 dark:divide-slate-800/60 font-medium">
+              {% for elem_data in cat_data.elementos %}
+              <tr 
+                class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group elemento-row"
+                data-elem-nombre="{{ elem_data.elemento.nombre|lower }}"
+              >
+                
+                <!-- Elemento Nombre e Icono -->
+                <td class="px-4 py-2.5 whitespace-nowrap sticky left-0 z-10 bg-white/95 dark:bg-slate-900/95 group-hover:bg-slate-50/95 dark:group-hover:bg-slate-800/95 border-r border-slate-200/60 dark:border-slate-800/60">
+                  <div class="flex items-center space-x-2.5">
+                    <span class="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <i data-lucide="{{ elem_data.elemento.icono_efectivo|default:'tag' }}" class="w-3.5 h-3.5"></i>
+                    </span>
+                    <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">{{ elem_data.elemento.nombre }}</span>
+                  </div>
+                </td>
+
+                <!-- 12 Celdas de Meses -->
+                {% for m in elem_data.meses %}
+                <td 
+                  class="px-2 py-2 text-right whitespace-nowrap {% if resumen_anual.es_anio_actual and m.mes == resumen_anual.mes_actual %}bg-cyan-50/40 dark:bg-cyan-950/20 border-x border-cyan-200/40 dark:border-cyan-800/30{% endif %}"
+                  data-col-mes="{{ m.mes }}"
+                >
+                  {% if m.total > 0 %}
+                  <button
+                    type="button"
+                    onclick="mostrarDetalleApuntes('{{ elem_data.elemento.nombre|escapejs }}', '{{ m.mes }}', '{{ resumen_anual.anio }}', 'ingreso', '{{ elem_data.elemento.id }}')"
+                    class="group/cell px-2 py-1 rounded-lg text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors inline-flex items-center space-x-1 cursor-pointer"
+                    title="{{ m.count }} apunte(s) en mes {{ m.mes }}/{{ resumen_anual.anio }} (clic para ver detalle)"
+                  >
+                    <span>+{{ m.total|floatformat:2 }} €</span>
+                    {% if m.count > 1 %}
+                    <span class="text-[9px] px-1 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-extrabold">{{ m.count }}</span>
+                    {% endif %}
+                  </button>
+                  {% else %}
+                  <a 
+                    href="{% url 'finanzas:ingreso_create' %}?elemento={{ elem_data.elemento.id }}&fecha=01/{{ m.mes|stringformat:'02d' }}/{{ resumen_anual.anio }}&next={% url 'finanzas:cuentas' %}?anio={{ resumen_anual.anio }}"
+                    class="group/empty inline-flex items-center justify-end w-full px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all text-right"
+                    title="Añadir ingreso para {{ elem_data.elemento.nombre }} en mes {{ m.mes }}/{{ resumen_anual.anio }}"
+                  >
+                    <span class="group-hover/empty:hidden">—</span>
+                    <span class="hidden group-hover/empty:inline-flex items-center text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      <i data-lucide="plus" class="w-3 h-3"></i>
+                    </span>
+                  </a>
                   {% endif %}
-                </button>
-                {% else %}
-                <a 
-                  href="{% url 'finanzas:ingreso_create' %}?elemento={{ elem_data.elemento.id }}&fecha=01/{{ m.mes|stringformat:'02d' }}/{{ resumen_anual.anio }}&next={% url 'finanzas:cuentas' %}?anio={{ resumen_anual.anio }}"
-                  class="block px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-right"
-                  title="Añadir ingreso en mes {{ m.mes }}/{{ resumen_anual.anio }}"
+                </td>
+                {% endfor %}
+
+                <!-- Total Anual del Elemento -->
+                <td class="px-4 py-2.5 text-right whitespace-nowrap font-black text-slate-900 dark:text-white bg-slate-50/50 dark:bg-slate-800/30">
+                  {% if elem_data.total_anual > 0 %}+{{ elem_data.total_anual|floatformat:2 }} €{% else %}—{% endif %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="14" class="px-4 py-6 text-center text-slate-400 text-xs italic">
+                  No hay elementos dados de alta en esta categoría.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+
+            <!-- Footer: Totales de la Categoría por Mes -->
+            <tfoot class="bg-slate-50/80 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700 font-bold text-xs">
+              <tr>
+                <td class="px-4 py-2.5 sticky left-0 z-10 bg-slate-50/95 dark:bg-slate-800/95 border-r border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white uppercase tracking-wider">
+                  Total {{ cat_data.categoria.nombre }}
+                </td>
+                {% for tot_m in cat_data.totales_meses %}
+                <td 
+                  class="px-3 py-2.5 text-right whitespace-nowrap font-bold {% if tot_m > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-300 dark:text-slate-600{% endif %} {% if resumen_anual.es_anio_actual and forloop.counter == resumen_anual.mes_actual %}bg-cyan-100/40 dark:bg-cyan-950/40 border-x border-cyan-200/50 dark:border-cyan-800/40{% endif %}"
+                  data-col-mes="{{ forloop.counter }}"
                 >
-                  —
-                </a>
-                {% endif %}
-              </td>
-              {% endfor %}
-
-              <!-- Total Anual del Elemento -->
-              <td class="px-4 py-2.5 text-right whitespace-nowrap font-black text-slate-900 dark:text-white bg-slate-50/50 dark:bg-slate-800/30">
-                {% if elem_data.total_anual > 0 %}+{{ elem_data.total_anual|floatformat:2 }} €{% else %}—{% endif %}
-              </td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="14" class="px-4 py-6 text-center text-slate-400 text-xs italic">
-                No hay elementos dados de alta en esta categoría.
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-
-          <!-- Footer: Totales de la Categoría por Mes -->
-          <tfoot class="bg-slate-50/80 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700 font-bold text-xs">
-            <tr>
-              <td class="px-4 py-2.5 sticky left-0 z-10 bg-slate-50/95 dark:bg-slate-800/95 border-r border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white uppercase tracking-wider">
-                Total {{ cat_data.categoria.nombre }}
-              </td>
-              {% for tot_m in cat_data.totales_meses %}
-              <td class="px-3 py-2.5 text-right whitespace-nowrap font-bold {% if tot_m > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-300 dark:text-slate-600{% endif %}">
-                {% if tot_m > 0 %}+{{ tot_m|floatformat:2 }} €{% else %}—{% endif %}
-              </td>
-              {% endfor %}
-              <td class="px-4 py-2.5 text-right whitespace-nowrap font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/40">
-                +{{ cat_data.total_anual|floatformat:2 }} €
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+                  {% if tot_m > 0 %}+{{ tot_m|floatformat:2 }} €{% else %}—{% endif %}
+                </td>
+                {% endfor %}
+                <td class="px-4 py-2.5 text-right whitespace-nowrap font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/40">
+                  +{{ cat_data.total_anual|floatformat:2 }} €
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
     </div>
     {% empty %}
@@ -240,21 +324,35 @@
 
   <!-- 3. SECCIÓN: CATEGORÍAS DE GASTOS -->
   <div class="space-y-6">
-    <div class="flex items-center space-x-2.5">
-      <div class="w-3.5 h-3.5 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50"></div>
-      <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">
-        Categorías de Gastos ({{ resumen_anual.anio }})
-      </h2>
+    <div class="flex items-center justify-between pb-1">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-3.5 h-3.5 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50"></div>
+        <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">
+          Categorías de Gastos ({{ resumen_anual.anio }})
+        </h2>
+        <span class="text-xs text-slate-400 font-normal">({{ resumen_anual.desglose_gastos|length }} categorías)</span>
+      </div>
     </div>
 
     {% for cat_data in resumen_anual.desglose_gastos %}
-    <!-- Caja de Categoría de Gasto -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+    <!-- Caja de Categoría de Gasto (Acordeón Plegable) -->
+    <div 
+      class="categoria-card bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden transition-all duration-200"
+      data-cat-nombre="{{ cat_data.categoria.nombre|lower }}"
+    >
       
-      <!-- Encabezado de la Categoría de Gasto -->
-      <div class="p-4 sm:p-5 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/40 dark:bg-slate-800/20">
+      <!-- Encabezado de la Categoría de Gasto (Clic para Colapsar/Expandir) -->
+      <div 
+        onclick="toggleCategoria('cat-body-gasto-{{ cat_data.categoria.id }}', this)"
+        class="p-4 sm:p-5 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/40 dark:bg-slate-800/20 cursor-pointer select-none hover:bg-slate-100/60 dark:hover:bg-slate-800/50 transition-colors group"
+        title="Clic para desplegar u ocultar los elementos de esta categoría"
+      >
         <div class="flex items-center space-x-3">
-          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-xs" style="background-color: {{ cat_data.categoria.color }};">
+          <div class="cat-chevron w-5 h-5 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-transform duration-200">
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+          </div>
+
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-xs shrink-0" style="background-color: {{ cat_data.categoria.color }};">
             <i data-lucide="{{ cat_data.categoria.icono|default:'folder' }}" class="w-4 h-4"></i>
           </div>
           <div>
@@ -266,7 +364,7 @@
           </div>
         </div>
 
-        <div class="flex items-center space-x-2.5">
+        <div class="flex items-center space-x-2.5" onclick="event.stopPropagation()">
           <span class="text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-3 py-1 rounded-xl border border-rose-200 dark:border-rose-800">
             Total Anual: -{{ cat_data.total_anual|floatformat:2 }} €
           </span>
@@ -277,111 +375,130 @@
       </div>
 
       <!-- Tabla de 12 Meses para esta Categoría de Gasto -->
-      <div class="overflow-x-auto scrollbar-thin">
-        <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
-          <thead class="bg-slate-50/60 dark:bg-slate-800/40 text-slate-400 font-semibold uppercase tracking-wider">
-            <tr>
-              <th class="px-4 py-2.5 sticky left-0 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm min-w-[200px]">
-                Elemento / Concepto
-              </th>
-              {% for abrev in resumen_anual.meses_abrev %}
-              <th class="px-3 py-2.5 text-right min-w-[95px]">{{ abrev }}</th>
-              {% endfor %}
-              <th class="px-4 py-2.5 text-right min-w-[120px] font-bold text-slate-700 dark:text-slate-200 bg-slate-100/50 dark:bg-slate-800/60">
-                Total Anual
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-200/60 dark:divide-slate-800/60 font-medium">
-            {% for elem_data in cat_data.elementos %}
-            <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
-              
-              <!-- Elemento Nombre e Icono -->
-              <td class="px-4 py-2.5 whitespace-nowrap sticky left-0 z-10 bg-white/95 dark:bg-slate-900/95 group-hover:bg-slate-50/95 dark:group-hover:bg-slate-800/95 border-r border-slate-200/60 dark:border-slate-800/60">
-                <div class="flex items-center space-x-2.5">
-                  <span class="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
-                    <i data-lucide="{{ elem_data.elemento.icono_efectivo|default:'tag' }}" class="w-3.5 h-3.5"></i>
-                  </span>
-                  <div>
-                    <div class="font-bold text-slate-800 dark:text-slate-200 text-xs">
-                      {{ elem_data.elemento.nombre }}
-                      {% if elem_data.elemento.finalizado %}
-                      <span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                        <i data-lucide="check-circle" class="w-2.5 h-2.5 mr-0.5"></i> Pagado
+      <div id="cat-body-gasto-{{ cat_data.categoria.id }}" class="cat-content-body transition-all duration-200">
+        <div class="overflow-x-auto scrollbar-thin">
+          <table class="min-w-full divide-y divide-slate-200/80 dark:divide-slate-800 text-left text-xs">
+            <thead class="bg-slate-50/60 dark:bg-slate-800/40 text-slate-400 font-semibold uppercase tracking-wider">
+              <tr>
+                <th class="px-4 py-2.5 sticky left-0 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm min-w-[200px]">
+                  Elemento / Concepto
+                </th>
+                {% for abrev in resumen_anual.meses_abrev %}
+                <th 
+                  class="px-3 py-2.5 text-right min-w-[95px] {% if resumen_anual.es_anio_actual and forloop.counter == resumen_anual.mes_actual %}bg-cyan-100/70 dark:bg-cyan-950/70 text-cyan-800 dark:text-cyan-200 font-extrabold border-x border-cyan-300 dark:border-cyan-700{% endif %}"
+                  data-col-mes="{{ forloop.counter }}"
+                >
+                  {{ abrev }}
+                </th>
+                {% endfor %}
+                <th class="px-4 py-2.5 text-right min-w-[120px] font-bold text-slate-700 dark:text-slate-200 bg-slate-100/50 dark:bg-slate-800/60">
+                  Total Anual
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200/60 dark:divide-slate-800/60 font-medium">
+              {% for elem_data in cat_data.elementos %}
+              <tr 
+                class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group elemento-row"
+                data-elem-nombre="{{ elem_data.elemento.nombre|lower }}"
+              >
+                
+                <!-- Elemento Nombre e Icono -->
+                <td class="px-4 py-2.5 whitespace-nowrap sticky left-0 z-10 bg-white/95 dark:bg-slate-900/95 group-hover:bg-slate-50/95 dark:group-hover:bg-slate-800/95 border-r border-slate-200/60 dark:border-slate-800/60">
+                  <div class="flex items-center space-x-2.5">
+                    <span class="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
+                      <i data-lucide="{{ elem_data.elemento.icono_efectivo|default:'tag' }}" class="w-3.5 h-3.5"></i>
+                    </span>
+                    <div>
+                      <div class="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                        {{ elem_data.elemento.nombre }}
+                        {% if elem_data.elemento.finalizado %}
+                        <span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                          <i data-lucide="check-circle" class="w-2.5 h-2.5 mr-0.5"></i> Pagado
+                        </span>
+                        {% endif %}
+                      </div>
+                      {% if elem_data.elemento.seguro %}
+                      <span class="text-[10px] text-cyan-600 dark:text-cyan-400 flex items-center">
+                        <i data-lucide="shield" class="w-2.5 h-2.5 mr-0.5"></i> Póliza {{ elem_data.elemento.seguro.compania }}
                       </span>
                       {% endif %}
                     </div>
-                    {% if elem_data.elemento.seguro %}
-                    <span class="text-[10px] text-cyan-600 dark:text-cyan-400 flex items-center">
-                      <i data-lucide="shield" class="w-2.5 h-2.5 mr-0.5"></i> Póliza {{ elem_data.elemento.seguro.compania }}
-                    </span>
-                    {% endif %}
                   </div>
-                </div>
-              </td>
+                </td>
 
-              <!-- 12 Celdas de Meses -->
-              {% for m in elem_data.meses %}
-              <td class="px-2 py-2 text-right whitespace-nowrap">
-                {% if m.total > 0 %}
-                <button
-                  type="button"
-                  onclick="mostrarDetalleApuntes('{{ elem_data.elemento.nombre|escapejs }}', '{{ m.mes }}', '{{ resumen_anual.anio }}', 'gasto', '{{ elem_data.elemento.id }}')"
-                  class="group/cell px-2 py-1 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors inline-flex items-center space-x-1 cursor-pointer"
-                  title="{{ m.count }} apunte(s) en mes {{ m.mes }}/{{ resumen_anual.anio }}"
+                <!-- 12 Celdas de Meses -->
+                {% for m in elem_data.meses %}
+                <td 
+                  class="px-2 py-2 text-right whitespace-nowrap {% if resumen_anual.es_anio_actual and m.mes == resumen_anual.mes_actual %}bg-cyan-50/40 dark:bg-cyan-950/20 border-x border-cyan-200/40 dark:border-cyan-800/30{% endif %}"
+                  data-col-mes="{{ m.mes }}"
                 >
-                  <span>{{ m.total|floatformat:2 }} €</span>
-                  {% if m.count > 1 %}
-                  <span class="text-[9px] px-1 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold">{{ m.count }}</span>
+                  {% if m.total > 0 %}
+                  <button
+                    type="button"
+                    onclick="mostrarDetalleApuntes('{{ elem_data.elemento.nombre|escapejs }}', '{{ m.mes }}', '{{ resumen_anual.anio }}', 'gasto', '{{ elem_data.elemento.id }}')"
+                    class="group/cell px-2 py-1 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors inline-flex items-center space-x-1 cursor-pointer"
+                    title="{{ m.count }} apunte(s) en mes {{ m.mes }}/{{ resumen_anual.anio }} (clic para ver detalle)"
+                  >
+                    <span>{{ m.total|floatformat:2 }} €</span>
+                    {% if m.count > 1 %}
+                    <span class="text-[9px] px-1 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold">{{ m.count }}</span>
+                    {% endif %}
+                  </button>
+                  {% else %}
+                  {% if elem_data.elemento.finalizado %}
+                  <span class="block px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 text-right">—</span>
+                  {% else %}
+                  <a 
+                    href="{% url 'finanzas:gasto_create' %}?elemento={{ elem_data.elemento.id }}&categoria={{ cat_data.categoria.id }}&fecha=01/{{ m.mes|stringformat:'02d' }}/{{ resumen_anual.anio }}&next={% url 'finanzas:cuentas' %}?anio={{ resumen_anual.anio }}"
+                    class="group/empty inline-flex items-center justify-end w-full px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all text-right"
+                    title="Añadir gasto para {{ elem_data.elemento.nombre }} en mes {{ m.mes }}/{{ resumen_anual.anio }}"
+                  >
+                    <span class="group-hover/empty:hidden">—</span>
+                    <span class="hidden group-hover/empty:inline-flex items-center text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                      <i data-lucide="plus" class="w-3 h-3"></i>
+                    </span>
+                  </a>
                   {% endif %}
-                </button>
-                {% else %}
-                {% if elem_data.elemento.finalizado %}
-                <span class="block px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 text-right">—</span>
-                {% else %}
-                <a 
-                  href="{% url 'finanzas:gasto_create' %}?elemento={{ elem_data.elemento.id }}&categoria={{ cat_data.categoria.id }}&fecha=01/{{ m.mes|stringformat:'02d' }}/{{ resumen_anual.anio }}&next={% url 'finanzas:cuentas' %}?anio={{ resumen_anual.anio }}"
-                  class="block px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-right"
-                  title="Añadir gasto en mes {{ m.mes }}/{{ resumen_anual.anio }}"
+                  {% endif %}
+                </td>
+                {% endfor %}
+
+                <!-- Total Anual del Elemento -->
+                <td class="px-4 py-2.5 text-right whitespace-nowrap font-black text-slate-900 dark:text-white bg-slate-50/50 dark:bg-slate-800/30">
+                  {% if elem_data.total_anual > 0 %}{{ elem_data.total_anual|floatformat:2 }} €{% else %}—{% endif %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="14" class="px-4 py-6 text-center text-slate-400 text-xs italic">
+                  No hay elementos dados de alta en esta categoría.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+
+            <!-- Footer: Totales de la Categoría por Mes -->
+            <tfoot class="bg-slate-50/80 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700 font-bold text-xs">
+              <tr>
+                <td class="px-4 py-2.5 sticky left-0 z-10 bg-slate-50/95 dark:bg-slate-800/95 border-r border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white uppercase tracking-wider">
+                  Total {{ cat_data.categoria.nombre }}
+                </td>
+                {% for tot_m in cat_data.totales_meses %}
+                <td 
+                  class="px-3 py-2.5 text-right whitespace-nowrap font-bold {% if tot_m > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-300 dark:text-slate-600{% endif %} {% if resumen_anual.es_anio_actual and forloop.counter == resumen_anual.mes_actual %}bg-cyan-100/40 dark:bg-cyan-950/40 border-x border-cyan-200/50 dark:border-cyan-800/40{% endif %}"
+                  data-col-mes="{{ forloop.counter }}"
                 >
-                  —
-                </a>
-                {% endif %}
-                {% endif %}
-              </td>
-              {% endfor %}
-
-              <!-- Total Anual del Elemento -->
-              <td class="px-4 py-2.5 text-right whitespace-nowrap font-black text-slate-900 dark:text-white bg-slate-50/50 dark:bg-slate-800/30">
-                {% if elem_data.total_anual > 0 %}{{ elem_data.total_anual|floatformat:2 }} €{% else %}—{% endif %}
-              </td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="14" class="px-4 py-6 text-center text-slate-400 text-xs italic">
-                No hay elementos dados de alta en esta categoría.
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-
-          <!-- Footer: Totales de la Categoría por Mes -->
-          <tfoot class="bg-slate-50/80 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700 font-bold text-xs">
-            <tr>
-              <td class="px-4 py-2.5 sticky left-0 z-10 bg-slate-50/95 dark:bg-slate-800/95 border-r border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white uppercase tracking-wider">
-                Total {{ cat_data.categoria.nombre }}
-              </td>
-              {% for tot_m in cat_data.totales_meses %}
-              <td class="px-3 py-2.5 text-right whitespace-nowrap font-bold {% if tot_m > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-300 dark:text-slate-600{% endif %}">
-                {% if tot_m > 0 %}-{{ tot_m|floatformat:2 }} €{% else %}—{% endif %}
-              </td>
-              {% endfor %}
-              <td class="px-4 py-2.5 text-right whitespace-nowrap font-black text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/40">
-                -{{ cat_data.total_anual|floatformat:2 }} €
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+                  {% if tot_m > 0 %}-{{ tot_m|floatformat:2 }} €{% else %}—{% endif %}
+                </td>
+                {% endfor %}
+                <td class="px-4 py-2.5 text-right whitespace-nowrap font-black text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/40">
+                  -{{ cat_data.total_anual|floatformat:2 }} €
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
     </div>
     {% empty %}

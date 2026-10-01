@@ -467,8 +467,14 @@ class FinanzasService:
             else Decimal("0.00")
         )
 
+        hoy = timezone.localdate()
+        es_anio_actual = bool(anio == hoy.year)
+        mes_actual = hoy.month
+
         return {
             "anio": anio,
+            "mes_actual": mes_actual,
+            "es_anio_actual": es_anio_actual,
             "meses_abrev": cls.MESES_ABREV,
             "meses_nombres": cls.MESES_NOMBRES,
             "desglose_ingresos": desglose_ingresos,

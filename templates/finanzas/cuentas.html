@@ -5,7 +5,7 @@
 {% block content %}
 <div class="space-y-6">
 
-  <!-- Header -->
+  <!-- Header Principal -->
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800">
     <div>
       <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
@@ -16,49 +16,155 @@
       </p>
     </div>
 
-    <!-- Actions -->
+    <!-- Acciones Rápidas -->
     <div class="flex items-center space-x-2.5">
-      <a href="{% url 'finanzas:ingreso_create' %}" class="inline-flex items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-600 shadow-sm shadow-cyan-600/30 transition-all cursor-pointer">
+      <a href="{% url 'finanzas:ingreso_create' %}?next={% url 'finanzas:cuentas' %}?anio={{ anio_actual }}" class="inline-flex items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-600 shadow-sm shadow-cyan-600/30 transition-all cursor-pointer">
         <i data-lucide="plus-circle" class="w-4 h-4 mr-1.5"></i>
         <span>Añadir Ingreso</span>
       </a>
-      <a href="{% url 'finanzas:gasto_create' %}" class="inline-flex items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 dark:from-slate-700 dark:to-slate-600 dark:hover:from-slate-600 dark:hover:to-slate-500 shadow-sm transition-all cursor-pointer">
+      <a href="{% url 'finanzas:gasto_create' %}?next={% url 'finanzas:cuentas' %}?anio={{ anio_actual }}" class="inline-flex items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 dark:from-slate-700 dark:to-slate-600 dark:hover:from-slate-600 dark:hover:to-slate-500 shadow-sm transition-all cursor-pointer">
         <i data-lucide="minus-circle" class="w-4 h-4 mr-1.5"></i>
         <span>Añadir Gasto</span>
       </a>
     </div>
   </div>
 
-  <!-- Selector de Año Dinámico (Reactivo con HTMX) -->
-  <div class="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+  <!-- Barra de Herramientas y Controles (Años, Trimestres, Buscador y Acordeones) -->
+  <div class="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
     
-    <div class="flex items-center space-x-2.5">
-      <div class="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
-        <i data-lucide="calendar" class="w-4 h-4"></i>
+    <!-- Fila 1: Selector de Año y Selector de Periodo / Trimestre -->
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+      
+      <!-- Selector de Año -->
+      <div class="flex items-center space-x-2.5 flex-wrap gap-y-2">
+        <div class="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
+          <i data-lucide="calendar" class="w-4 h-4"></i>
+        </div>
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Ejercicio:
+        </span>
+        <div class="flex items-center space-x-1.5" id="year-buttons-group">
+          {% for a in anios_disponibles %}
+          <button 
+            type="button"
+            hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ a }}"
+            hx-target="#cuentas-contenido-container"
+            onclick="updateActiveYear(this, {{ a }})"
+            class="year-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer {% if a == anio_actual %}bg-cyan-500 text-white shadow-sm shadow-cyan-500/30{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}"
+          >
+            {{ a }}
+          </button>
+          {% empty %}
+          <span class="text-xs text-slate-400">{{ anio_actual }}</span>
+          {% endfor %}
+        </div>
       </div>
-      <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-        Ejercicio Anual:
-      </span>
-      <div class="flex items-center space-x-1.5" id="year-buttons-group">
-        {% for a in anios_disponibles %}
-        <button 
-          type="button"
-          hx-get="{% url 'finanzas:cuentas_mes_htmx' %}?anio={{ a }}"
-          hx-target="#cuentas-contenido-container"
-          onclick="updateActiveYear(this, {{ a }})"
-          class="year-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer {% if a == anio_actual %}bg-cyan-500 text-white shadow-sm shadow-cyan-500/30{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}"
-        >
-          {{ a }}
-        </button>
-        {% empty %}
-        <span class="text-xs text-slate-400">{{ anio_actual }}</span>
-        {% endfor %}
+
+      <!-- Selector de Periodo / Trimestre (Elimina scroll lateral en pantallas medianas) -->
+      <div class="flex items-center space-x-2 flex-wrap gap-y-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center space-x-1">
+          <i data-lucide="columns-3" class="w-3.5 h-3.5 text-cyan-500 mr-1"></i>
+          <span>Vista:</span>
+        </span>
+        <div class="inline-flex p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 text-xs font-semibold">
+          <button 
+            type="button" 
+            onclick="filtrarTrimestre('ALL', this)" 
+            class="trimestre-btn px-3 py-1 rounded-xl transition-all cursor-pointer bg-white dark:bg-slate-700 text-cyan-700 dark:text-cyan-300 shadow-2xs font-bold"
+            data-periodo="ALL"
+          >
+            12 Meses
+          </button>
+          <button 
+            type="button" 
+            onclick="filtrarTrimestre('Q1', this)" 
+            class="trimestre-btn px-2.5 py-1 rounded-xl transition-all cursor-pointer text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+            data-periodo="Q1"
+            title="Enero, Febrero, Marzo"
+          >
+            T1 (Ene-Mar)
+          </button>
+          <button 
+            type="button" 
+            onclick="filtrarTrimestre('Q2', this)" 
+            class="trimestre-btn px-2.5 py-1 rounded-xl transition-all cursor-pointer text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+            data-periodo="Q2"
+            title="Abril, Mayo, Junio"
+          >
+            T2 (Abr-Jun)
+          </button>
+          <button 
+            type="button" 
+            onclick="filtrarTrimestre('Q3', this)" 
+            class="trimestre-btn px-2.5 py-1 rounded-xl transition-all cursor-pointer text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+            data-periodo="Q3"
+            title="Julio, Agosto, Septiembre"
+          >
+            T3 (Jul-Sep)
+          </button>
+          <button 
+            type="button" 
+            onclick="filtrarTrimestre('Q4', this)" 
+            class="trimestre-btn px-2.5 py-1 rounded-xl transition-all cursor-pointer text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+            data-periodo="Q4"
+            title="Octubre, Noviembre, Diciembre"
+          >
+            T4 (Oct-Dic)
+          </button>
+        </div>
       </div>
+
     </div>
 
-    <div class="text-xs text-slate-400 flex items-center space-x-1">
-      <i data-lucide="info" class="w-3.5 h-3.5 text-cyan-500"></i>
-      <span>Haz clic en cualquier importe para ver o gestionar los apuntes individuales del mes.</span>
+    <!-- Fila 2: Buscador en Vivo, Controles de Acordeón e Info -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      
+      <!-- Buscador en tiempo real -->
+      <div class="relative w-full sm:w-80">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+        <input 
+          type="text" 
+          id="filtro-cuentas-input" 
+          placeholder="Buscar elemento o categoría (ej. Luz, Netflix...)" 
+          class="w-full pl-9.5 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all"
+        >
+        <button 
+          id="limpiar-filtro-btn" 
+          type="button" 
+          onclick="limpiarFiltroEnVivo()"
+          class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded cursor-pointer"
+          title="Borrar filtro"
+        >
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+
+      <!-- Controles de Acordeón (Colapsar / Expandir Todas) e Info -->
+      <div class="flex items-center space-x-2 flex-wrap gap-y-2">
+        <div class="inline-flex items-center space-x-1.5 text-xs">
+          <button 
+            type="button" 
+            onclick="expandirTodasCategorias()" 
+            class="inline-flex items-center px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 font-semibold transition-colors cursor-pointer"
+            title="Desplegar todas las categorías"
+          >
+            <i data-lucide="chevrons-down-up" class="w-3.5 h-3.5 mr-1 text-cyan-500"></i>
+            <span>Expandir</span>
+          </button>
+          <button 
+            type="button" 
+            onclick="colapsarTodasCategorias()" 
+            class="inline-flex items-center px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 font-semibold transition-colors cursor-pointer"
+            title="Plegar todas las categorías para ver un resumen compacto"
+          >
+            <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 mr-1 text-slate-400"></i>
+            <span>Colapsar</span>
+          </button>
+        </div>
+
+        <span id="filtro-conteo-badge" class="hidden px-2.5 py-1 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 text-[11px] font-bold"></span>
+      </div>
+
     </div>
 
   </div>
@@ -77,6 +183,8 @@
 {% block extra_js %}
 <script>
   let currentSelectedYear = {{ anio_actual }};
+  let currentTrimestre = 'ALL';
+  let chartCuentasInstance = null;
 
   function updateActiveYear(btn, year) {
     currentSelectedYear = year;
@@ -88,6 +196,270 @@
     btn.classList.add('bg-cyan-500', 'text-white', 'shadow-sm', 'shadow-cyan-500/30');
   }
 
+  // Acordeón: Colapsar / Expandir una categoría individual
+  function toggleCategoria(bodyId, headerEl) {
+    const body = document.getElementById(bodyId);
+    if (!body) return;
+    const isHidden = body.classList.contains('hidden');
+    const chevron = headerEl.querySelector('.cat-chevron');
+
+    if (isHidden) {
+      body.classList.remove('hidden');
+      if (chevron) chevron.classList.remove('-rotate-90');
+    } else {
+      body.classList.add('hidden');
+      if (chevron) chevron.classList.add('-rotate-90');
+    }
+  }
+
+  // Acordeón Global: Expandir todas
+  function expandirTodasCategorias() {
+    document.querySelectorAll('.cat-content-body').forEach(el => el.classList.remove('hidden'));
+    document.querySelectorAll('.cat-chevron').forEach(el => el.classList.remove('-rotate-90'));
+  }
+
+  // Acordeón Global: Colapsar todas
+  function colapsarTodasCategorias() {
+    document.querySelectorAll('.cat-content-body').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.cat-chevron').forEach(el => el.classList.add('-rotate-90'));
+  }
+
+  // Filtro de Trimestre (Q1, Q2, Q3, Q4, ALL)
+  function filtrarTrimestre(periodo, btn) {
+    currentTrimestre = periodo;
+    
+    // Actualizar estilo visual de los botones de trimestre
+    document.querySelectorAll('.trimestre-btn').forEach(el => {
+      el.classList.remove('bg-white', 'dark:bg-slate-700', 'text-cyan-700', 'dark:text-cyan-300', 'shadow-2xs', 'font-bold');
+      el.classList.add('text-slate-600', 'dark:text-slate-300');
+    });
+    if (btn) {
+      btn.classList.add('bg-white', 'dark:bg-slate-700', 'text-cyan-700', 'dark:text-cyan-300', 'shadow-2xs', 'font-bold');
+      btn.classList.remove('text-slate-600', 'dark:text-slate-300');
+    }
+
+    const mesesPorTrimestre = {
+      'Q1': [1, 2, 3],
+      'Q2': [4, 5, 6],
+      'Q3': [7, 8, 9],
+      'Q4': [10, 11, 12],
+    };
+
+    const celdasMes = document.querySelectorAll('[data-col-mes]');
+    celdasMes.forEach(el => {
+      const mesNum = parseInt(el.getAttribute('data-col-mes'), 10);
+      if (periodo === 'ALL') {
+        el.classList.remove('hidden');
+      } else {
+        const visibles = mesesPorTrimestre[periodo] || [];
+        if (visibles.includes(mesNum)) {
+          el.classList.remove('hidden');
+        } else {
+          el.classList.add('hidden');
+        }
+      }
+    });
+  }
+
+  // Filtro en Vivo de Elementos y Categorías
+  function filtrarElementosEnVivo(query) {
+    const q = (query || '').trim().toLowerCase();
+    const btnLimpiar = document.getElementById('limpiar-filtro-btn');
+    const badgeConteo = document.getElementById('filtro-conteo-badge');
+    const cards = document.querySelectorAll('.categoria-card');
+
+    if (btnLimpiar) {
+      if (q) btnLimpiar.classList.remove('hidden');
+      else btnLimpiar.classList.add('hidden');
+    }
+
+    if (!q) {
+      cards.forEach(card => {
+        card.classList.remove('hidden');
+        card.querySelectorAll('.elemento-row').forEach(row => row.classList.remove('hidden'));
+      });
+      if (badgeConteo) badgeConteo.classList.add('hidden');
+      return;
+    }
+
+    let matchCount = 0;
+    cards.forEach(card => {
+      const catNombre = (card.getAttribute('data-cat-nombre') || '').toLowerCase();
+      const catMatch = catNombre.includes(q);
+      const rows = card.querySelectorAll('.elemento-row');
+      let rowsMatch = 0;
+
+      rows.forEach(row => {
+        const elemNombre = (row.getAttribute('data-elem-nombre') || '').toLowerCase();
+        if (catMatch || elemNombre.includes(q)) {
+          row.classList.remove('hidden');
+          rowsMatch++;
+          matchCount++;
+        } else {
+          row.classList.add('hidden');
+        }
+      });
+
+      if (catMatch || rowsMatch > 0) {
+        card.classList.remove('hidden');
+        // Desplegar categoría para ver coincidencias
+        const body = card.querySelector('.cat-content-body');
+        if (body) body.classList.remove('hidden');
+        const chevron = card.querySelector('.cat-chevron');
+        if (chevron) chevron.classList.remove('-rotate-90');
+      } else {
+        card.classList.add('hidden');
+      }
+    });
+
+    if (badgeConteo) {
+      badgeConteo.textContent = `${matchCount} coincidencia(s)`;
+      badgeConteo.classList.remove('hidden');
+    }
+  }
+
+  function limpiarFiltroEnVivo() {
+    const input = document.getElementById('filtro-cuentas-input');
+    if (input) {
+      input.value = '';
+      filtrarElementosEnVivo('');
+      input.focus();
+    }
+  }
+
+  // Gráfica Resumen Anual Interactiva (Chart.js)
+  function toggleGraficoAnual() {
+    const container = document.getElementById('grafico-anual-container');
+    const textoBtn = document.getElementById('texto-toggle-grafico');
+    if (!container) return;
+
+    const isHidden = container.classList.contains('hidden');
+    if (isHidden) {
+      container.classList.remove('hidden');
+      if (textoBtn) textoBtn.textContent = 'Ocultar Gráfica';
+      renderizarGraficoAnual();
+    } else {
+      container.classList.add('hidden');
+      if (textoBtn) textoBtn.textContent = 'Ver Gráfica';
+    }
+  }
+
+  function renderizarGraficoAnual() {
+    const canvas = document.getElementById('chartCuentasAnual');
+    const dataEl = document.getElementById('cuentas-chart-data');
+    if (!canvas || !dataEl || typeof Chart === 'undefined') return;
+
+    let chartData;
+    try {
+      chartData = JSON.parse(dataEl.textContent);
+    } catch (e) {
+      console.error('Error parseando datos de gráfica:', e);
+      return;
+    }
+
+    if (chartCuentasInstance) {
+      chartCuentasInstance.destroy();
+      chartCuentasInstance = null;
+    }
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const gridColor = isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.7)';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+
+    const ctx = canvas.getContext('2d');
+    chartCuentasInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: chartData.labels,
+        datasets: [
+          {
+            label: 'Ingresos (€)',
+            data: chartData.ingresos,
+            backgroundColor: 'rgba(16, 185, 129, 0.75)',
+            borderColor: '#10b981',
+            borderWidth: 1.5,
+            borderRadius: 6,
+            order: 2,
+          },
+          {
+            label: 'Gastos (€)',
+            data: chartData.gastos,
+            backgroundColor: 'rgba(244, 63, 94, 0.75)',
+            borderColor: '#f43f5e',
+            borderWidth: 1.5,
+            borderRadius: 6,
+            order: 2,
+          },
+          {
+            label: 'Balance Neto (€)',
+            data: chartData.balances,
+            type: 'line',
+            borderColor: '#06b6d4',
+            backgroundColor: 'rgba(6, 182, 212, 0.1)',
+            borderWidth: 2.5,
+            pointBackgroundColor: '#06b6d4',
+            pointRadius: 3.5,
+            tension: 0.3,
+            fill: false,
+            order: 1,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              color: textColor,
+              font: { size: 11, weight: 'bold' },
+              usePointStyle: true,
+              boxWidth: 8,
+            }
+          },
+          tooltip: {
+            backgroundColor: isDark ? '#1e293b' : '#0f172a',
+            titleColor: '#ffffff',
+            bodyColor: '#e2e8f0',
+            borderColor: isDark ? '#334155' : '#cbd5e1',
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) label += ': ';
+                if (context.parsed.y !== null) {
+                  label += new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(context.parsed.y);
+                }
+                return label;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: textColor, font: { size: 10 } }
+          },
+          y: {
+            grid: { color: gridColor },
+            ticks: {
+              color: textColor,
+              font: { size: 10 },
+              callback: function(value) { return value + ' €'; }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // Modal de Detalle de Apuntes
   function mostrarDetalleApuntes(nombreElemento, mes, anio, tipo, elementoId) {
     const container = document.getElementById('detalle-apuntes-modal-container');
     htmx.ajax('GET', `{% url 'finanzas:elemento_mes_detalle_htmx' %}?elemento_id=${elementoId}&anio=${anio}&mes=${mes}&tipo=${tipo}`, {
@@ -98,22 +470,55 @@
 
   function cerrarDetalleModal() {
     const container = document.getElementById('detalle-apuntes-modal-container');
-    container.innerHTML = '';
+    if (container) container.innerHTML = '';
   }
 
-  // Cerrar modal al presionar Escape
   document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
       cerrarDetalleModal();
     }
   });
 
-  // Re-iniciar lucide icons cuando HTMX cargue contenido
-  document.addEventListener('htmx:afterSwap', function() {
+  // Inicialización y re-aplicación tras swaps de HTMX
+  function initCuentasUsabilidad() {
     if (typeof lucide !== 'undefined') {
       lucide.createIcons();
+    }
+
+    // Re-aplicar filtro de trimestre actual
+    if (currentTrimestre && currentTrimestre !== 'ALL') {
+      const activeBtn = document.querySelector(`.trimestre-btn[data-periodo="${currentTrimestre}"]`);
+      filtrarTrimestre(currentTrimestre, activeBtn);
+    }
+
+    // Re-aplicar filtro de texto si había algo escrito
+    const input = document.getElementById('filtro-cuentas-input');
+    if (input && input.value) {
+      filtrarElementosEnVivo(input.value);
+    }
+
+    // Re-renderizar gráfica si el contenedor estaba abierto
+    const grafContainer = document.getElementById('grafico-anual-container');
+    if (grafContainer && !grafContainer.classList.contains('hidden')) {
+      renderizarGraficoAnual();
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    initCuentasUsabilidad();
+
+    const input = document.getElementById('filtro-cuentas-input');
+    if (input) {
+      input.addEventListener('input', function() {
+        filtrarElementosEnVivo(this.value);
+      });
+    }
+  });
+
+  document.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target && evt.detail.target.id === 'cuentas-contenido-container') {
+      initCuentasUsabilidad();
     }
   });
 </script>
 {% endblock %}
-

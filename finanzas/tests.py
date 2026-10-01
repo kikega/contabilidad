@@ -832,6 +832,24 @@ class FormatoFechaFormulariosTests(TestCase):
         self.assertIn('placeholder="dd/mm/aaaa"', html)
         self.assertIn('datepicker', html)
 
+    def test_cuentas_usabilidad_componentes(self) -> None:
+        """Verifica que la página de Cuentas incluya los componentes de usabilidad mejorados."""
+        client = Client()
+        client.force_login(self.user)
+        response = client.get(reverse("finanzas:cuentas"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "filtro-cuentas-input")
+        self.assertContains(response, "trimestre-btn")
+        self.assertContains(response, "categoria-card")
+        self.assertContains(response, "cat-chevron")
+        self.assertContains(response, "chartCuentasAnual")
+        self.assertContains(response, "btn-toggle-grafico")
+
+        # Verificar que el servicio devuelva mes_actual y es_anio_actual
+        resumen = response.context["resumen_anual"]
+        self.assertIn("mes_actual", resumen)
+        self.assertIn("es_anio_actual", resumen)
+
 
 
 
