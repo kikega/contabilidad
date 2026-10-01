@@ -120,20 +120,26 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       
       <!-- Buscador en tiempo real -->
-      <div class="relative w-full sm:w-80">
-        <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+      <div class="relative w-full sm:w-80 flex items-center">
+        <i 
+          data-lucide="search" 
+          id="filtro-icono-lupa" 
+          class="w-4 h-4 absolute text-slate-400 pointer-events-none"
+          style="left: 14px !important; top: 50% !important; transform: translateY(-50%) !important;"
+        ></i>
         <input 
           type="text" 
           id="filtro-cuentas-input" 
           placeholder="Buscar elemento o categoría (ej. Luz, Netflix...)" 
-          style="padding-left: 2.75rem !important;"
-          class="w-full pl-11 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all"
+          style="padding-left: 44px !important;"
+          class="w-full pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all"
         >
         <button 
           id="limpiar-filtro-btn" 
           type="button" 
           onclick="limpiarFiltroEnVivo()"
-          class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded cursor-pointer"
+          style="right: 12px !important; top: 50% !important; transform: translateY(-50%) !important;"
+          class="hidden absolute text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded cursor-pointer"
           title="Borrar filtro"
         >
           <i data-lucide="x" class="w-3.5 h-3.5"></i>

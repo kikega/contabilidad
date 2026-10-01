@@ -173,7 +173,21 @@ html.dark .flatpickr-months .flatpickr-next-month:hover svg {
   fill: #22d3ee !important;
 }
 
-/* Buscador en vivo de cuentas: separación y alineación de placeholder e icono */
+/* Buscador en vivo de cuentas: icono de lupa, input y botón de limpiar */
+#filtro-icono-lupa {
+  left: 14px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
 #filtro-cuentas-input {
-  padding-left: 2.75rem !important; /* 44px para no pisar el icono y dar aire al placeholder */
+  padding-left: 44px !important; /* 44px para dar margen y despegar el placeholder */
+}
+
+#limpiar-filtro-btn {
+  right: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
 }
