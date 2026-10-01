@@ -25,12 +25,16 @@ class SeguroService:
             },
         )
 
-        nombre_elem = f"{seguro.compania} - {seguro.bien_asegurado}".strip()
+        nombre_base = f"{seguro.compania} - {seguro.bien_asegurado}".strip()
+        nombre_elem = nombre_base
         icono_elem = seguro.RAMO_ICONOS.get(seguro.ramo, "shield-check")
         desc_elem = f"Póliza {seguro.numero_poliza} ({seguro.get_ramo_display()})"
 
         if seguro.elemento_id:
             elem = seguro.elemento
+            # Si el nombre base ya está en uso por otro elemento, desambiguar con el número de póliza
+            if Elemento.objects.filter(categoria=cat_seguros, nombre=nombre_elem).exclude(pk=elem.pk).exists():
+                nombre_elem = f"{nombre_base} ({seguro.numero_poliza})".strip()
             elem.categoria = cat_seguros
             elem.nombre = nombre_elem
             elem.icono = icono_elem
@@ -39,6 +43,11 @@ class SeguroService:
             elem.save()
         else:
             elem = Elemento.objects.filter(categoria=cat_seguros, nombre=nombre_elem).first()
+            # Si el elemento existente ya está vinculado a otra póliza de seguro, desambiguar
+            if elem and hasattr(elem, "seguro") and elem.seguro_id and elem.seguro_id != seguro.id:
+                nombre_elem = f"{nombre_base} ({seguro.numero_poliza})".strip()
+                elem = Elemento.objects.filter(categoria=cat_seguros, nombre=nombre_elem).first()
+
             if not elem:
                 elem = Elemento.objects.create(
                     categoria=cat_seguros,

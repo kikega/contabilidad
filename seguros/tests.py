@@ -196,4 +196,43 @@ class SegurosModelsTests(TestCase):
         self.assertEqual(kpis["urgentes_count"], 1)  # s1 (15 días)
         self.assertEqual(kpis["proximos_count"], 1)  # s2 (50 días)
 
+    def test_formularios_seguros_formato_dd_mm_yyyy(self) -> None:
+        """Verifica que los formularios de seguros acepten fechas en formato dd/mm/yyyy."""
+        from datetime import date
+        from seguros.forms import HistorialRenovacionSeguroForm, PagoSeguroGastoForm, SeguroForm
+
+        seguro_form = SeguroForm(data={
+            "ramo": Seguro.Ramo.COCHE,
+            "compania": "Línea Directa",
+            "numero_poliza": "LD-12345",
+            "bien_asegurado": "Moto",
+            "fecha_inicio": "10/02/2026",
+            "fecha_vencimiento": "10/02/2027",
+            "periodicidad": Seguro.Periodicidad.ANUAL,
+            "prima_actual": "180.00",
+            "activo": True,
+        })
+        self.assertTrue(seguro_form.is_valid(), seguro_form.errors)
+        seguro = seguro_form.save()
+        self.assertEqual(seguro.fecha_inicio, date(2026, 2, 10))
+        self.assertEqual(seguro.fecha_vencimiento, date(2027, 2, 10))
+
+        hist_form = HistorialRenovacionSeguroForm(data={
+            "ejercicio_anio": 2025,
+            "prima_pagada": "170.00",
+            "fecha_renovacion": "10/02/2025",
+            "notas": "Precio anterior",
+        })
+        self.assertTrue(hist_form.is_valid(), hist_form.errors)
+        hist = hist_form.save(commit=False)
+        self.assertEqual(hist.fecha_renovacion, date(2025, 2, 10))
+
+        pago_form = PagoSeguroGastoForm(data={
+            "fecha": "10/02/2026",
+            "monto": "180.00",
+            "concepto": "Recibo Moto",
+        })
+        self.assertTrue(pago_form.is_valid(), pago_form.errors)
+        self.assertEqual(pago_form.cleaned_data["fecha"], date(2026, 2, 10))
+
 

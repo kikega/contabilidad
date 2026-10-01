@@ -5,7 +5,7 @@ from typing import Any
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from finanzas.forms import CHECKBOX_CLASSES, INPUT_CLASSES, SELECT_CLASSES
+from finanzas.forms import CHECKBOX_CLASSES, INPUT_CLASSES, SELECT_CLASSES, DATEPICKER_CLASSES, DATE_INPUT_FORMATS
 from seguros.models import HistorialRenovacionSeguro, Seguro
 
 
@@ -40,8 +40,14 @@ class SeguroForm(forms.ModelForm):
             "gestor_nombre": forms.TextInput(attrs={"class": INPUT_CLASSES, "placeholder": "Nombre del gestor/mediador"}),
             "gestor_telefono": forms.TextInput(attrs={"class": INPUT_CLASSES, "placeholder": "Teléfono de contacto"}),
             "gestor_email": forms.EmailInput(attrs={"class": INPUT_CLASSES, "placeholder": "correo@agencia.com"}),
-            "fecha_inicio": forms.DateInput(attrs={"class": INPUT_CLASSES, "type": "date"}),
-            "fecha_vencimiento": forms.DateInput(attrs={"class": INPUT_CLASSES, "type": "date"}),
+            "fecha_inicio": forms.DateInput(
+                format="%d/%m/%Y",
+                attrs={"class": DATEPICKER_CLASSES, "placeholder": "dd/mm/aaaa", "autocomplete": "off"},
+            ),
+            "fecha_vencimiento": forms.DateInput(
+                format="%d/%m/%Y",
+                attrs={"class": DATEPICKER_CLASSES, "placeholder": "dd/mm/aaaa", "autocomplete": "off"},
+            ),
             "periodicidad": forms.Select(attrs={"class": SELECT_CLASSES}),
             "prima_actual": forms.NumberInput(
                 attrs={"class": INPUT_CLASSES, "placeholder": "0.00", "step": "0.01", "min": "0.01"}
@@ -59,6 +65,13 @@ class SeguroForm(forms.ModelForm):
             ),
         }
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if "fecha_inicio" in self.fields:
+            self.fields["fecha_inicio"].input_formats = DATE_INPUT_FORMATS
+        if "fecha_vencimiento" in self.fields:
+            self.fields["fecha_vencimiento"].input_formats = DATE_INPUT_FORMATS
+
 
 class HistorialRenovacionSeguroForm(forms.ModelForm):
     """Formulario para registrar renovaciones anuales pasadas."""
@@ -69,9 +82,17 @@ class HistorialRenovacionSeguroForm(forms.ModelForm):
         widgets = {
             "ejercicio_anio": forms.NumberInput(attrs={"class": INPUT_CLASSES, "placeholder": "Año (ej: 2025)"}),
             "prima_pagada": forms.NumberInput(attrs={"class": INPUT_CLASSES, "placeholder": "0.00", "step": "0.01"}),
-            "fecha_renovacion": forms.DateInput(attrs={"class": INPUT_CLASSES, "type": "date"}),
+            "fecha_renovacion": forms.DateInput(
+                format="%d/%m/%Y",
+                attrs={"class": DATEPICKER_CLASSES, "placeholder": "dd/mm/aaaa", "autocomplete": "off"},
+            ),
             "notas": forms.TextInput(attrs={"class": INPUT_CLASSES, "placeholder": "Observaciones de la renovación"}),
         }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if "fecha_renovacion" in self.fields:
+            self.fields["fecha_renovacion"].input_formats = DATE_INPUT_FORMATS
 
 
 class PagoSeguroGastoForm(forms.Form):
@@ -79,7 +100,11 @@ class PagoSeguroGastoForm(forms.Form):
 
     fecha = forms.DateField(
         label=_("Fecha de cobro / pago"),
-        widget=forms.DateInput(attrs={"class": INPUT_CLASSES, "type": "date"}),
+        input_formats=DATE_INPUT_FORMATS,
+        widget=forms.DateInput(
+            format="%d/%m/%Y",
+            attrs={"class": DATEPICKER_CLASSES, "placeholder": "dd/mm/aaaa", "autocomplete": "off"},
+        ),
     )
     monto = forms.DecimalField(
         label=_("Importe (€)"),

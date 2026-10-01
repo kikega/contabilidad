@@ -30,7 +30,10 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+raw_hosts = os.getenv("ALLOWED_HOSTS", "")
+ALLOWED_HOSTS = [h.strip() for h in raw_hosts.split(",") if h.strip()]
+if not ALLOWED_HOSTS and DEBUG:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "::1"]
 
 
 # Application definition
@@ -126,6 +129,16 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Formatos de fecha en español (dd/mm/yyyy)
+DATE_FORMAT = "d/m/Y"
+DATE_INPUT_FORMATS = [
+    "%d/%m/%Y",  # 25/12/2026
+    "%d/%m/%y",  # 25/12/26
+    "%d-%m-%Y",  # 25-12-2026
+    "%d-%m-%y",  # 25-12-26
+    "%Y-%m-%d",  # 2026-12-25 (formato ISO para compatibilidad interna y tests)
+]
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
@@ -144,15 +157,47 @@ LOGIN_REDIRECT_URL = "finanzas:dashboard"
 LOGOUT_REDIRECT_URL = "usuarios:login"
 
 
-# Hardening de seguridad (solo producción; en desarrollo no se aplica)
-if not DEBUG:
-    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True") == "True"
-    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "True") == "True"
-    CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "True") == "True"
-    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "True") == "True"
-    SECURE_HSTS_PRELOAD = os.getenv("SECURE_HSTS_PRELOAD", "True") == "True"
-    SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "same-origin")
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# ==============================================================================
+# CONFIGURACIÓN DE SEGURIDAD Y SSL / HTTPS (ENTORNO DE PRODUCCIÓN)
+# ==============================================================================
+# NOTA PARA DESARROLLO:
+# Dado que en el servidor de desarrollo no se usan certificados SSL, el siguiente
+# bloque se mantiene comentado. Si se activara en desarrollo sobre HTTP plano,
+# el navegador sufriría bucles de redirección a https:// y las cookies de sesión/CSRF
+# serían rechazadas.
+#
+# Para activar en el servidor de PRODUCCIÓN (cuando existan certificados SSL válidos),
+# descomentar las siguientes directivas:
+#
+# if not DEBUG:
+#     # Redirige automáticamente todas las peticiones HTTP a HTTPS (puerto 443).
+#     # Evita que el tráfico sensible viaje sin cifrar por la red.
+#     SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True") == "True"
+#
+#     # Marca la cookie de sesión con el atributo 'Secure'. El navegador solo la
+#     # enviará si la conexión es HTTPS, evitando robo de sesión (Session Hijacking).
+#     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "True") == "True"
+#
+#     # Marca la cookie de protección contra CSRF con el atributo 'Secure'.
+#     # Garantiza que el token CSRF viaje exclusivamente cifrado.
+#     CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "True") == "True"
+#
+#     # HTTP Strict Transport Security (HSTS): Instruye a los navegadores a recordar
+#     # que este dominio debe visitarse SIEMPRE mediante HTTPS durante el tiempo indicado
+#     # (31536000 segundos = 1 año), previniendo ataques Man-in-the-Middle y SSL-strip.
+#     SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
+#     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "True") == "True"
+#     SECURE_HSTS_PRELOAD = os.getenv("SECURE_HSTS_PRELOAD", "True") == "True"
+#
+#     # Indica a Django que confíe en la cabecera 'X-Forwarded-Proto: https' enviada por
+#     # un proxy inverso (Nginx, Caddy, Cloudflare, Traefik).
+#     # ¡ATENCIÓN!: Únicamente activar si el proxy inverso está configurado para sanear
+#     # y eliminar esta cabecera si proviene directamente de clientes no confiables.
+#     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Directivas de seguridad recomendadas (compatibles tanto con HTTP como con HTTPS):
+SECURE_CONTENT_TYPE_NOSNIFF = True   # Previene ataques basados en adivinación de tipo MIME (MIME-sniffing)
+X_FRAME_OPTIONS = "DENY"             # Protege contra Clickjacking impidiendo incrustar el sitio en iframes
+SECURE_REFERRER_POLICY = "same-origin"  # No filtra URLs internas completas a dominios externos en Referer
 
 

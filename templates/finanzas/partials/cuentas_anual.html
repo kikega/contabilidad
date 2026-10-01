@@ -134,7 +134,7 @@
           <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1 rounded-xl border border-emerald-200 dark:border-emerald-800">
             Total Anual: +{{ cat_data.total_anual|floatformat:2 }} €
           </span>
-          <a href="{% url 'finanzas:ingreso_create' %}?categoria={{ cat_data.categoria.id }}" class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition-colors">
+          <a href="{% url 'finanzas:ingreso_create' %}?categoria={{ cat_data.categoria.id }}&next={% url 'finanzas:cuentas' %}?anio={{ resumen_anual.anio }}" class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition-colors">
             <i data-lucide="plus" class="w-3.5 h-3.5 mr-1"></i> Añadir Ingreso
           </a>
         </div>
@@ -187,9 +187,9 @@
                 </button>
                 {% else %}
                 <a 
-                  href="{% url 'finanzas:ingreso_create' %}?elemento={{ elem_data.elemento.id }}"
+                  href="{% url 'finanzas:ingreso_create' %}?elemento={{ elem_data.elemento.id }}&fecha=01/{{ m.mes|stringformat:'02d' }}/{{ resumen_anual.anio }}&next={% url 'finanzas:cuentas' %}?anio={{ resumen_anual.anio }}"
                   class="block px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-right"
-                  title="Añadir ingreso en este mes"
+                  title="Añadir ingreso en mes {{ m.mes }}/{{ resumen_anual.anio }}"
                 >
                   —
                 </a>
@@ -270,7 +270,7 @@
           <span class="text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-3 py-1 rounded-xl border border-rose-200 dark:border-rose-800">
             Total Anual: -{{ cat_data.total_anual|floatformat:2 }} €
           </span>
-          <a href="{% url 'finanzas:gasto_create' %}?categoria={{ cat_data.categoria.id }}" class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-xs transition-colors">
+          <a href="{% url 'finanzas:gasto_create' %}?categoria={{ cat_data.categoria.id }}&next={% url 'finanzas:cuentas' %}?anio={{ resumen_anual.anio }}" class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-xs transition-colors">
             <i data-lucide="plus" class="w-3.5 h-3.5 mr-1"></i> Añadir Gasto
           </a>
         </div>
@@ -340,9 +340,9 @@
                 <span class="block px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 text-right">—</span>
                 {% else %}
                 <a 
-                  href="{% url 'finanzas:gasto_create' %}?elemento={{ elem_data.elemento.id }}"
+                  href="{% url 'finanzas:gasto_create' %}?elemento={{ elem_data.elemento.id }}&categoria={{ cat_data.categoria.id }}&fecha=01/{{ m.mes|stringformat:'02d' }}/{{ resumen_anual.anio }}&next={% url 'finanzas:cuentas' %}?anio={{ resumen_anual.anio }}"
                   class="block px-2 py-1 rounded-lg text-xs text-slate-300 dark:text-slate-600 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-right"
-                  title="Añadir gasto en este mes"
+                  title="Añadir gasto en mes {{ m.mes }}/{{ resumen_anual.anio }}"
                 >
                   —
                 </a>

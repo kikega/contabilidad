@@ -725,6 +725,114 @@ class FinanzasIntegrationTests(TestCase):
         self.assertContains(response, "Mesa reservada en la terraza")
 
 
+class FormatoFechaFormulariosTests(TestCase):
+    """Verifica que todos los formularios acepten y rendericen fechas en formato dd/mm/yyyy."""
+
+    def setUp(self) -> None:
+        self.user = Usuario.objects.create_user(
+            email="test_fechas@familia.com",
+            first_name="Tester",
+            password="password123",
+        )
+        self.cat_ingreso = Categoria.objects.create(
+            nombre="Nóminas Test",
+            tipo=Categoria.Tipo.INGRESO,
+        )
+        self.cat_gasto = Categoria.objects.create(
+            nombre="Hogar Test",
+            tipo=Categoria.Tipo.GASTO,
+        )
+        self.elem_ingreso = Elemento.objects.create(
+            categoria=self.cat_ingreso,
+            nombre="Nómina Tester",
+        )
+        self.elem_gasto = Elemento.objects.create(
+            categoria=self.cat_gasto,
+            nombre="Luz Test",
+        )
+
+    def test_ingreso_form_acepta_dd_mm_yyyy(self) -> None:
+        from datetime import date
+        from finanzas.forms import IngresoForm
+        form = IngresoForm(data={
+            "elemento": self.elem_ingreso.id,
+            "monto": "1500.50",
+            "fecha": "25/12/2026",
+            "descripcion": "Paga extra",
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        ingreso = form.save(commit=False)
+        self.assertEqual(ingreso.fecha, date(2026, 12, 25))
+
+    def test_gasto_form_acepta_dd_mm_yyyy(self) -> None:
+        from datetime import date
+        from finanzas.forms import GastoForm
+        form = GastoForm(data={
+            "categoria": self.cat_gasto.id,
+            "elemento": self.elem_gasto.id,
+            "concepto": "Factura Diciembre",
+            "monto": "85.20",
+            "fecha": "15/03/2026",
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        gasto = form.save(commit=False)
+        self.assertEqual(gasto.fecha, date(2026, 3, 15))
+
+    def test_elemento_form_acepta_dd_mm_yyyy(self) -> None:
+        from datetime import date
+        from finanzas.forms import ElementoForm
+        form = ElementoForm(data={
+            "categoria": self.cat_gasto.id,
+            "nombre": "Préstamo Reforma",
+            "finalizado": True,
+            "fecha_finalizacion": "30/06/2026",
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        elem = form.save()
+        self.assertEqual(elem.fecha_finalizacion, date(2026, 6, 30))
+
+    def test_seguro_form_acepta_dd_mm_yyyy(self) -> None:
+        from datetime import date
+        from seguros.forms import SeguroForm
+        from seguros.models import Seguro
+        form = SeguroForm(data={
+            "ramo": Seguro.Ramo.HOGAR,
+            "compania": "Mapfre Test",
+            "numero_poliza": "POL-999",
+            "bien_asegurado": "Vivienda Test",
+            "fecha_inicio": "01/01/2026",
+            "fecha_vencimiento": "01/01/2027",
+            "periodicidad": Seguro.Periodicidad.ANUAL,
+            "prima_actual": "320.00",
+            "activo": True,
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        seguro = form.save()
+        self.assertEqual(seguro.fecha_inicio, date(2026, 1, 1))
+        self.assertEqual(seguro.fecha_vencimiento, date(2027, 1, 1))
+
+    def test_pago_seguro_form_acepta_dd_mm_yyyy(self) -> None:
+        from datetime import date
+        from seguros.forms import PagoSeguroGastoForm
+        form = PagoSeguroGastoForm(data={
+            "fecha": "15/05/2026",
+            "monto": "250.00",
+            "concepto": "Recibo Anual",
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["fecha"], date(2026, 5, 15))
+
+    def test_widget_renderiza_formato_dd_mm_yyyy(self) -> None:
+        from datetime import date
+        from finanzas.forms import IngresoForm
+        ingreso = Ingreso(elemento=self.elem_ingreso, monto=Decimal("100"), fecha=date(2026, 7, 28))
+        form = IngresoForm(instance=ingreso)
+        html = form["fecha"].as_widget()
+        self.assertIn('value="28/07/2026"', html)
+        self.assertIn('placeholder="dd/mm/aaaa"', html)
+        self.assertIn('datepicker', html)
+
+
 
 
 

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Eliminar Ingreso - Gestión Económica Familiar{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto py-10">
+  <div class="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-rose-200 dark:border-rose-950/60 shadow-lg text-center">
+    
+    <div class="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-500 mx-auto flex items-center justify-center mb-4">
+      <i data-lucide="alert-triangle" class="w-7 h-7"></i>
+    </div>
+
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">
+      ¿Eliminar Ingreso?
+    </h2>
+    
+    <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
+      Estás a punto de eliminar el apunte de ingreso:
+      <span class="font-bold text-slate-900 dark:text-white block mt-1">
+        {{ object.descripcion|default:object.elemento.nombre }} — {{ object.monto|floatformat:2 }} € ({{ object.fecha|date:"d M Y" }})
+      </span>
+    </p>
+
+    <div class="mt-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs text-left">
+      <div class="flex items-start space-x-2">
+        <i data-lucide="info" class="w-4 h-4 shrink-0 mt-0.5"></i>
+        <span>Esta acción no se puede deshacer. Se actualizarán los balances y acumulados anuales.</span>
+      </div>
+    </div>
+
+    <form method="POST" class="mt-6 flex items-center justify-center space-x-3">
+      {% csrf_token %}
+      {% if next_url %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      {% endif %}
+      <a href="{% if next_url %}{{ next_url }}{% else %}{% url 'finanzas:cuentas' %}{% endif %}" class="px-5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+        Cancelar
+      </a>
+      <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 shadow-md shadow-rose-600/30 transition-all cursor-pointer">
+        Confirmar y Eliminar
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

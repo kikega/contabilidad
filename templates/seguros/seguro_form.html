@@ -83,17 +83,24 @@
       </div>
 
       <!-- Fechas y Costes -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
           <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-            Fecha Vencimiento
+            Fecha Inicio (Efecto)
+          </label>
+          {{ form.fecha_inicio }}
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+            Fecha Vencimiento *
           </label>
           {{ form.fecha_vencimiento }}
         </div>
 
         <div>
           <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-            Prima Actual (€)
+            Prima Actual (€) *
           </label>
           {{ form.prima_actual }}
         </div>

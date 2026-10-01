@@ -24,6 +24,19 @@ CHECKBOX_CLASSES = (
     "rounded border-slate-300 dark:border-slate-700 text-cyan-600 "
     "focus:ring-cyan-500 h-4 w-4 bg-white dark:bg-slate-800"
 )
+DATEPICKER_CLASSES = (
+    "w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 "
+    "bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 "
+    "focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all placeholder:text-slate-400 "
+    "datepicker"
+)
+DATE_INPUT_FORMATS = [
+    "%d/%m/%Y",
+    "%d/%m/%y",
+    "%d-%m-%Y",
+    "%d-%m-%y",
+    "%Y-%m-%d",
+]
 
 
 class CategoriaForm(forms.ModelForm):
@@ -63,7 +76,8 @@ class ElementoForm(forms.ModelForm):
             "es_fijo": forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
             "finalizado": forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
             "fecha_finalizacion": forms.DateInput(
-                attrs={"class": INPUT_CLASSES, "type": "date", "placeholder": "Fecha en la que se terminó de pagar"}
+                format="%d/%m/%Y",
+                attrs={"class": DATEPICKER_CLASSES, "placeholder": "dd/mm/aaaa", "autocomplete": "off"},
             ),
             "icono": forms.TextInput(
                 attrs={"class": INPUT_CLASSES, "placeholder": "Opcional (hereda de categoría si está vacío)"}
@@ -76,6 +90,8 @@ class ElementoForm(forms.ModelForm):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         tipo = kwargs.pop("tipo", None)
         super().__init__(*args, **kwargs)
+        if "fecha_finalizacion" in self.fields:
+            self.fields["fecha_finalizacion"].input_formats = DATE_INPUT_FORMATS
         if tipo:
             self.fields["categoria"].queryset = Categoria.objects.filter(tipo=tipo)
 
@@ -97,9 +113,11 @@ class IngresoForm(forms.ModelForm):
                 }
             ),
             "fecha": forms.DateInput(
+                format="%d/%m/%Y",
                 attrs={
-                    "class": INPUT_CLASSES,
-                    "type": "date",
+                    "class": DATEPICKER_CLASSES,
+                    "placeholder": "dd/mm/aaaa",
+                    "autocomplete": "off",
                 }
             ),
             "descripcion": forms.TextInput(
@@ -119,6 +137,8 @@ class IngresoForm(forms.ModelForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        if "fecha" in self.fields:
+            self.fields["fecha"].input_formats = DATE_INPUT_FORMATS
         self.fields["elemento"].queryset = Elemento.objects.filter(
             categoria__tipo=Categoria.Tipo.INGRESO
         ).select_related("categoria").order_by("categoria__nombre", "nombre")
@@ -163,9 +183,11 @@ class GastoForm(forms.ModelForm):
                 }
             ),
             "fecha": forms.DateInput(
+                format="%d/%m/%Y",
                 attrs={
-                    "class": INPUT_CLASSES,
-                    "type": "date",
+                    "class": DATEPICKER_CLASSES,
+                    "placeholder": "dd/mm/aaaa",
+                    "autocomplete": "off",
                 }
             ),
             "es_fijo": forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
@@ -180,6 +202,8 @@ class GastoForm(forms.ModelForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        if "fecha" in self.fields:
+            self.fields["fecha"].input_formats = DATE_INPUT_FORMATS
         from finanzas.services import FinanzasService
 
         self.fields["categoria"].queryset = FinanzasService.get_categorias_gasto_queryset()

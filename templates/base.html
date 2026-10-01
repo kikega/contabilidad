@@ -28,6 +28,9 @@
   <link rel="stylesheet" href="{% static 'css/tailwind.min.css' %}">
   {% endif %}
 
+  <!-- Flatpickr CSS (Self-Hosted en static/vendor) -->
+  <link rel="stylesheet" href="{% static 'vendor/flatpickr.min.css' %}">
+
   <!-- Estilos Custom y Tema -->
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 
@@ -35,6 +38,8 @@
   <script src="{% static 'vendor/htmx.min.js' %}"></script>
   <script src="{% static 'vendor/chart.umd.min.js' %}"></script>
   <script src="{% static 'vendor/lucide.min.js' %}"></script>
+  <script src="{% static 'vendor/flatpickr.min.js' %}"></script>
+  <script src="{% static 'vendor/flatpickr-es.js' %}"></script>
 
   <!-- Dark Mode Script inicial (evita flash blanco) -->
   <script>
@@ -229,9 +234,35 @@
       });
     });
 
-    // Re-ejecutar renderizado de Lucide icons tras cada swap de HTMX
-    document.body.addEventListener('htmx:afterSwap', function() {
-      lucide.createIcons();
+    // Inicializador de selectores de fecha Flatpickr en español y formato dd/mm/aaaa
+    function initDatepickers(context = document) {
+      if (typeof flatpickr === 'undefined') return;
+      const elements = context.querySelectorAll ? context.querySelectorAll('.datepicker') : [];
+      elements.forEach(function(el) {
+        if (el._flatpickr) {
+          el._flatpickr.destroy();
+        }
+        flatpickr(el, {
+          dateFormat: "d/m/Y",
+          allowInput: true,
+          locale: (typeof flatpickr.l10ns !== 'undefined' && flatpickr.l10ns.es) ? flatpickr.l10ns.es : "es",
+          disableMobile: true,
+        });
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() { initDatepickers(); });
+    } else {
+      initDatepickers();
+    }
+
+    // Re-ejecutar renderizado de Lucide icons y selectores de fecha tras cada swap de HTMX
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+      initDatepickers(evt.detail.target || document);
     });
   </script>
 

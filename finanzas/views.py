@@ -10,7 +10,7 @@ from django.core.paginator import Paginator
 from django.db.models import Prefetch
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
@@ -45,6 +45,21 @@ def _next_url_valida(request: HttpRequest, next_url: Optional[str]) -> Optional[
     ):
         return next_url
     return None
+
+
+def _parsear_fecha_param(fecha_param: Optional[str]) -> Any:
+    """Parsea el parámetro de fecha desde GET admitiendo formatos ISO (YYYY-MM-DD) y español (DD/MM/YYYY)."""
+    if not fecha_param:
+        return None
+    try:
+        return date.fromisoformat(fecha_param)
+    except (ValueError, TypeError):
+        pass
+    try:
+        from datetime import datetime as dt
+        return dt.strptime(fecha_param, "%d/%m/%Y").date()
+    except (ValueError, TypeError):
+        return fecha_param
 
 
 def _int_param(
@@ -220,7 +235,7 @@ class ElementoMesDetalleHtmxView(LoginRequiredMixin, View):
             ).select_related("usuario").order_by("fecha")
             total_mes = sum((item.monto for item in items), Decimal("0.00"))
 
-        fecha_sugerida = f"{anio:04d}-{mes:02d}-01"
+        fecha_sugerida = f"01/{mes:02d}/{anio:04d}"
 
         return render(
             request,
@@ -273,8 +288,8 @@ class TransaccionesTablaHtmxView(LoginRequiredMixin, View):
                     "monto": ing.monto,
                     "usuario": ing.usuario.get_short_name() if ing.usuario else "-",
                     "es_positivo": True,
-                    "edit_url": f"/finanzas/ingresos/{ing.id}/editar/",
-                    "delete_url": f"/finanzas/ingresos/{ing.id}/eliminar/",
+                    "edit_url": reverse("finanzas:ingreso_update", kwargs={"pk": ing.id}),
+                    "delete_url": reverse("finanzas:ingreso_delete", kwargs={"pk": ing.id}),
                 })
 
         if tipo in ["TODOS", "GASTO"]:
@@ -297,8 +312,8 @@ class TransaccionesTablaHtmxView(LoginRequiredMixin, View):
                     "monto": gas.monto,
                     "usuario": gas.usuario.get_short_name() if gas.usuario else "-",
                     "es_positivo": False,
-                    "edit_url": f"/finanzas/gastos/{gas.id}/editar/",
-                    "delete_url": f"/finanzas/gastos/{gas.id}/eliminar/",
+                    "edit_url": reverse("finanzas:gasto_update", kwargs={"pk": gas.id}),
+                    "delete_url": reverse("finanzas:gasto_delete", kwargs={"pk": gas.id}),
                 })
 
         movimientos.sort(key=lambda x: x["fecha"], reverse=True)
@@ -345,6 +360,11 @@ class IngresoCreateView(LoginRequiredMixin, CreateView):
         initial = super().get_initial()
         elem_id = self.request.GET.get("elemento")
         cat_id = self.request.GET.get("categoria")
+        fecha_param = self.request.GET.get("fecha")
+        if fecha_param:
+            parsed = _parsear_fecha_param(fecha_param)
+            if parsed:
+                initial["fecha"] = parsed
         if elem_id:
             initial["elemento"] = elem_id
         elif cat_id:
@@ -352,6 +372,12 @@ class IngresoCreateView(LoginRequiredMixin, CreateView):
             if elem:
                 initial["elemento"] = elem.id
         return initial
+
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        next_url = self.request.GET.get("next") or self.request.POST.get("next")
+        context["next_url"] = _next_url_valida(self.request, next_url)
+        return context
 
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
@@ -374,6 +400,12 @@ class IngresoUpdateView(LoginRequiredMixin, UpdateView):
     template_name = "finanzas/ingreso_form.html"
     success_url = reverse_lazy("finanzas:cuentas")
 
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        next_url = self.request.GET.get("next") or self.request.POST.get("next")
+        context["next_url"] = _next_url_valida(self.request, next_url)
+        return context
+
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
         return _next_url_valida(self.request, next_url) or reverse_lazy("finanzas:cuentas")
@@ -391,6 +423,12 @@ class IngresoDeleteView(LoginRequiredMixin, DeleteView):
 
     model = Ingreso
     success_url = reverse_lazy("finanzas:cuentas")
+
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        next_url = self.request.GET.get("next") or self.request.POST.get("next")
+        context["next_url"] = _next_url_valida(self.request, next_url)
+        return context
 
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
@@ -413,6 +451,8 @@ class GastoFormContextMixin:
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
+        next_url = self.request.GET.get("next") or self.request.POST.get("next")
+        context["next_url"] = _next_url_valida(self.request, next_url)
         categorias = list(FinanzasService.get_categorias_gasto_queryset())
         elementos_por_categoria: Dict[str, list] = {}
         for elem in (
@@ -442,6 +482,11 @@ class GastoCreateView(LoginRequiredMixin, GastoFormContextMixin, CreateView):
         initial = super().get_initial()
         elem_id = self.request.GET.get("elemento")
         cat_id = self.request.GET.get("categoria")
+        fecha_param = self.request.GET.get("fecha")
+        if fecha_param:
+            parsed = _parsear_fecha_param(fecha_param)
+            if parsed:
+                initial["fecha"] = parsed
         if cat_id:
             initial["categoria"] = cat_id
         if elem_id:
@@ -499,6 +544,12 @@ class GastoDeleteView(LoginRequiredMixin, DeleteView):
 
     model = Gasto
     success_url = reverse_lazy("finanzas:cuentas")
+
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        next_url = self.request.GET.get("next") or self.request.POST.get("next")
+        context["next_url"] = _next_url_valida(self.request, next_url)
+        return context
 
     def get_success_url(self) -> str:
         next_url = self.request.GET.get("next") or self.request.POST.get("next")
