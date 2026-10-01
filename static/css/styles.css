@@ -172,3 +172,8 @@ html.dark .flatpickr-months .flatpickr-prev-month:hover svg,
 html.dark .flatpickr-months .flatpickr-next-month:hover svg {
   fill: #22d3ee !important;
 }
+
+/* Buscador en vivo de cuentas: separación y alineación de placeholder e icono */
+#filtro-cuentas-input {
+  padding-left: 2.75rem !important; /* 44px para no pisar el icono y dar aire al placeholder */
+}
