@@ -81,6 +81,18 @@
         </div>
       </div>
 
+      <!-- Medio de Pago / Imputación de Gasto -->
+      <div id="medio-pago-wrapper">
+        <label for="id_medio_pago" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+          Medio de Pago / Imputación *
+        </label>
+        {{ form.medio_pago }}
+        <p id="medio-pago-tarjeta-hint" class="hidden mt-2 text-xs text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/40 p-3 rounded-xl border border-cyan-200 dark:border-cyan-800">
+          <i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i>
+          <strong>Pagado con Tarjeta (desglose analítico):</strong> Se imputará a esta categoría para tu análisis pero <strong>no duplicará en el total de gastos del mes</strong> (ya que está contemplado en la liquidación de la tarjeta).
+        </p>
+      </div>
+
       <div id="recurrente-field" class="flex items-center space-x-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800">
         {{ form.es_fijo }}
         <label for="id_es_fijo" class="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
@@ -127,6 +139,9 @@
   const recurrenteField = document.getElementById('recurrente-field');
   const recurrenteHint = document.getElementById('recurrente-auto-hint');
   const esFijoCheck = document.getElementById('id_es_fijo');
+  const medioPagoSelect = document.getElementById('id_medio_pago');
+  const medioPagoWrapper = document.getElementById('medio-pago-wrapper');
+  const medioPagoTarjetaHint = document.getElementById('medio-pago-tarjeta-hint');
 
   const categoriasTarjeta = (config.categorias_tarjeta || []).map(Number);
   const esEdicion = {{ object.pk|yesno:"true,false" }};
@@ -184,14 +199,43 @@
     if (conceptoStar) conceptoStar.classList.toggle('hidden', auto);
   }
 
+  function actualizarMedioPago() {
+    const tarjeta = esTarjeta();
+    if (tarjeta) {
+      if (medioPagoWrapper) medioPagoWrapper.classList.add('hidden');
+      if (medioPagoSelect) medioPagoSelect.value = 'LIQUIDACION_TARJETA';
+    } else {
+      if (medioPagoWrapper) medioPagoWrapper.classList.remove('hidden');
+      if (medioPagoSelect && medioPagoSelect.value === 'LIQUIDACION_TARJETA') {
+        medioPagoSelect.value = 'DOMICILIADO';
+      }
+      actualizarHintMedioPago();
+    }
+  }
+
+  function actualizarHintMedioPago() {
+    if (medioPagoTarjetaHint && medioPagoSelect) {
+      const esTarjetaVal = medioPagoSelect.value === 'TARJETA';
+      medioPagoTarjetaHint.classList.toggle('hidden', !esTarjetaVal);
+    }
+  }
+
   function actualizarTodo() {
     filtrarElementos();
     actualizarConcepto();
     actualizarRecurrente();
+    actualizarMedioPago();
   }
 
   catSelect.addEventListener('change', actualizarTodo);
-  elemSelect.addEventListener('change', actualizarTodo);
+  elemSelect.addEventListener('change', function () {
+    actualizarConcepto();
+    actualizarRecurrente();
+  });
+
+  if (medioPagoSelect) {
+    medioPagoSelect.addEventListener('change', actualizarHintMedioPago);
+  }
 
   actualizarTodo();
 })();

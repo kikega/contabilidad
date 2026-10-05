@@ -188,6 +188,12 @@ class Ingreso(models.Model):
 class Gasto(models.Model):
     """Registro de gastos periódicos y desembolsos de la unidad familiar."""
 
+    class MedioPago(models.TextChoices):
+        DOMICILIADO = "DOMICILIADO", _("Domiciliado / Cargo en cuenta")
+        TARJETA = "TARJETA", _("Pagado con Tarjeta (desglose)")
+        LIQUIDACION_TARJETA = "LIQUIDACION_TARJETA", _("Liquidación mensual de Tarjeta")
+        EFECTIVO = "EFECTIVO", _("Efectivo")
+
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -217,6 +223,16 @@ class Gasto(models.Model):
         default=timezone.now,
         db_index=True,
     )
+    medio_pago = models.CharField(
+        _("medio de pago"),
+        max_length=25,
+        choices=MedioPago.choices,
+        default=MedioPago.DOMICILIADO,
+        db_index=True,
+        help_text=_(
+            "Indica si es cargo domiciliado en cuenta, compra pagada con tarjeta (desglose que no duplica) o la liquidación global de la tarjeta."
+        ),
+    )
     es_fijo = models.BooleanField(
         _("gasto fijo/recurrente"),
         default=False,
@@ -232,12 +248,18 @@ class Gasto(models.Model):
         ordering = ["-fecha", "-creado_en"]
         indexes = [
             models.Index(fields=["fecha", "monto"]),
+            models.Index(fields=["medio_pago", "fecha"]),
         ]
 
     @property
     def categoria(self) -> Optional[Categoria]:
         """Acceso a la categoría padre del elemento."""
         return self.elemento.categoria if self.elemento else None
+
+    @property
+    def computa_en_total(self) -> bool:
+        """Devuelve True si este gasto computa en el total mensual (no es un desglose de tarjeta ya contemplado en la liquidación)."""
+        return self.medio_pago != self.MedioPago.TARJETA
 
     def __str__(self) -> str:
         elem_name = self.elemento.nombre if self.elemento else "Gasto"

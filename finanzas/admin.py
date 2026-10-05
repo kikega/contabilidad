@@ -60,8 +60,8 @@ class IngresoAdmin(admin.ModelAdmin):
 
 @admin.register(Gasto)
 class GastoAdmin(admin.ModelAdmin):
-    list_display = ("fecha", "concepto", "elemento", "monto", "es_fijo", "usuario")
-    list_filter = ("elemento__categoria", "es_fijo", "fecha", "usuario")
+    list_display = ("fecha", "concepto", "elemento", "monto", "medio_pago", "es_fijo", "usuario")
+    list_filter = ("medio_pago", "elemento__categoria", "es_fijo", "fecha", "usuario")
     search_fields = ("concepto", "notas", "elemento__nombre")
     list_select_related = ("elemento__categoria", "usuario")
     autocomplete_fields = ["elemento", "usuario"]

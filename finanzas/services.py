@@ -111,12 +111,14 @@ class FinanzasService:
             filtro_ingresos &= Q(usuario_id=usuario_id)
             filtro_gastos &= Q(usuario_id=usuario_id)
 
-        # Totales periodo actual
+        # Totales periodo actual (excluyendo desglose de tarjeta para no duplicar con la liquidación)
+        filtro_gastos_computables = filtro_gastos & ~Q(medio_pago=Gasto.MedioPago.TARJETA)
+
         total_ingresos = Ingreso.objects.filter(filtro_ingresos).aggregate(
             total=Coalesce(Sum("monto"), Decimal("0.00"), output_field=DecimalField())
         )["total"]
 
-        total_gastos = Gasto.objects.filter(filtro_gastos).aggregate(
+        total_gastos = Gasto.objects.filter(filtro_gastos_computables).aggregate(
             total=Coalesce(Sum("monto"), Decimal("0.00"), output_field=DecimalField())
         )["total"]
 
@@ -127,21 +129,37 @@ class FinanzasService:
             else Decimal("0.00")
         )
 
+        # Métrica de Control & Reducción de Tarjeta
+        total_tarjetas = Gasto.objects.filter(
+            filtro_gastos, medio_pago=Gasto.MedioPago.LIQUIDACION_TARJETA
+        ).aggregate(total=Coalesce(Sum("monto"), Decimal("0.00"), output_field=DecimalField()))["total"]
+
+        total_desglose_tarjeta = Gasto.objects.filter(
+            filtro_gastos, medio_pago=Gasto.MedioPago.TARJETA
+        ).aggregate(total=Coalesce(Sum("monto"), Decimal("0.00"), output_field=DecimalField()))["total"]
+
+        resto_tarjeta_sin_desglosar = max(Decimal("0.00"), total_tarjetas - total_desglose_tarjeta)
+
         # Comparativa con el periodo anterior de igual duración
         dias_periodo = (fecha_fin - fecha_inicio).days
         prev_inicio = fecha_inicio - (fecha_fin - fecha_inicio)
         prev_fin = fecha_inicio
 
         filtro_prev_ing = Q(fecha__gte=prev_inicio, fecha__lt=prev_fin)
-        filtro_prev_gas = Q(fecha__gte=prev_inicio, fecha__lt=prev_fin)
+        filtro_prev_gas = Q(fecha__gte=prev_inicio, fecha__lt=prev_fin) & ~Q(medio_pago=Gasto.MedioPago.TARJETA)
+        filtro_prev_tarjeta = Q(fecha__gte=prev_inicio, fecha__lt=prev_fin, medio_pago=Gasto.MedioPago.LIQUIDACION_TARJETA)
         if usuario_id:
             filtro_prev_ing &= Q(usuario_id=usuario_id)
             filtro_prev_gas &= Q(usuario_id=usuario_id)
+            filtro_prev_tarjeta &= Q(usuario_id=usuario_id)
 
         prev_ingresos = Ingreso.objects.filter(filtro_prev_ing).aggregate(
             total=Coalesce(Sum("monto"), Decimal("0.00"), output_field=DecimalField())
         )["total"]
         prev_gastos = Gasto.objects.filter(filtro_prev_gas).aggregate(
+            total=Coalesce(Sum("monto"), Decimal("0.00"), output_field=DecimalField())
+        )["total"]
+        prev_tarjetas = Gasto.objects.filter(filtro_prev_tarjeta).aggregate(
             total=Coalesce(Sum("monto"), Decimal("0.00"), output_field=DecimalField())
         )["total"]
         prev_ahorro = prev_ingresos - prev_gastos
@@ -157,16 +175,25 @@ class FinanzasService:
         var_ingresos, dir_ingresos = calc_variacion(total_ingresos, prev_ingresos)
         var_gastos, dir_gastos = calc_variacion(total_gastos, prev_gastos)
         var_ahorro, dir_ahorro = calc_variacion(ahorro_neto, prev_ahorro)
+        var_tarjeta, dir_tarjeta = calc_variacion(total_tarjetas, prev_tarjetas)
 
         return {
             "total_ingresos": total_ingresos,
             "total_gastos": total_gastos,
             "ahorro_neto": ahorro_neto,
             "ratio_ahorro": ratio_ahorro,
+            "control_tarjeta": {
+                "total_liquidacion": total_tarjetas,
+                "total_desglosado": total_desglose_tarjeta,
+                "resto_sin_desglosar": resto_tarjeta_sin_desglosar,
+                "variacion": var_tarjeta,
+                "direccion": dir_tarjeta,
+            },
             "tendencias": {
                 "ingresos": {"variacion": var_ingresos, "direccion": dir_ingresos},
                 "gastos": {"variacion": var_gastos, "direccion": dir_gastos},
                 "ahorro": {"variacion": var_ahorro, "direccion": dir_ahorro},
+                "tarjeta": {"variacion": var_tarjeta, "direccion": dir_tarjeta},
             },
         }
 
@@ -196,9 +223,10 @@ class FinanzasService:
         )
         dict_ingresos = {item["mes"].month: item["total"] for item in ingresos_por_mes_qs}
 
-        # Agrupación de gastos por mes
+        # Agrupación de gastos computables por mes (excluye desglose de tarjeta)
+        gastos_computables_filtro = filtro_gastos & ~Q(medio_pago=Gasto.MedioPago.TARJETA)
         gastos_por_mes_qs = (
-            Gasto.objects.filter(filtro_gastos)
+            Gasto.objects.filter(gastos_computables_filtro)
             .annotate(mes=TruncMonth("fecha"))
             .values("mes")
             .annotate(total=Sum("monto"))
@@ -223,9 +251,9 @@ class FinanzasService:
             ahorro_mensual_series.append(float(neto))
             ahorro_acumulado_series.append(float(acumulado))
 
-        # Distribución de gastos agrupados por Categoría padre
+        # Distribución de gastos agrupados por Categoría padre (solo computables para que sume 100% real)
         distribucion_qs = (
-            Gasto.objects.filter(filtro_gastos)
+            Gasto.objects.filter(gastos_computables_filtro)
             .values("elemento__categoria__nombre", "elemento__categoria__color")
             .annotate(total=Sum("monto"))
             .order_by("-total")
@@ -280,8 +308,10 @@ class FinanzasService:
         ingresos_por_anio = {int(f["anio"]): f["total"] for f in ingresos_qs}
 
         # Gastos por año y categoría (2 queries de agregación, sin N+1)
+        # Excluimos desgloses de tarjeta para no duplicar con las liquidaciones de tarjeta
         gastos_qs = (
             Gasto.objects.filter(filtro_gas, elemento__categoria__tipo=Categoria.Tipo.GASTO)
+            .exclude(medio_pago=Gasto.MedioPago.TARJETA)
             .annotate(anio=ExtractYear("fecha"))
             .values("anio", "elemento__categoria_id", "elemento__categoria__nombre", "elemento__categoria__color")
             .annotate(total=Sum("monto"))
@@ -441,11 +471,56 @@ class FinanzasService:
             _agregados_por_elemento_mes(Ingreso),
         )
 
-        # 2. Gastos
-        desglose_gastos, totales_gastos_mes, total_anual_gastos = _construir_desglose(
+        # 2. Gastos por categoría y elemento (desglose visual completo)
+        desglose_gastos, _, _ = _construir_desglose(
             cls.get_categorias_gasto_queryset(),
             _agregados_por_elemento_mes(Gasto),
         )
+
+        # 2.1 Totales globales de gastos mes a mes (excluyendo desglose de tarjeta para no duplicar con la liquidación)
+        totales_gastos_mes = [Decimal("0.00")] * 12
+        qs_gastos_computables = (
+            Gasto.objects.filter(fecha__gte=inicio_anio, fecha__lt=fin_anio)
+            .exclude(medio_pago=Gasto.MedioPago.TARJETA)
+        )
+        if usuario_id:
+            qs_gastos_computables = qs_gastos_computables.filter(usuario_id=usuario_id)
+
+        agrup_gastos_mes = (
+            qs_gastos_computables.annotate(mes=TruncMonth("fecha"))
+            .values("mes")
+            .annotate(total=Sum("monto"))
+        )
+        for fila in agrup_gastos_mes:
+            totales_gastos_mes[fila["mes"].month - 1] = fila["total"]
+        total_anual_gastos = sum(totales_gastos_mes, Decimal("0.00"))
+
+        # 2.2 Control y análisis de tarjetas en el año
+        qs_tarjetas_liq = Gasto.objects.filter(
+            fecha__gte=inicio_anio, fecha__lt=fin_anio, medio_pago=Gasto.MedioPago.LIQUIDACION_TARJETA
+        )
+        qs_tarjetas_desg = Gasto.objects.filter(
+            fecha__gte=inicio_anio, fecha__lt=fin_anio, medio_pago=Gasto.MedioPago.TARJETA
+        )
+        if usuario_id:
+            qs_tarjetas_liq = qs_tarjetas_liq.filter(usuario_id=usuario_id)
+            qs_tarjetas_desg = qs_tarjetas_desg.filter(usuario_id=usuario_id)
+
+        totales_liq_tarjeta_mes = [Decimal("0.00")] * 12
+        totales_desg_tarjeta_mes = [Decimal("0.00")] * 12
+        for f in qs_tarjetas_liq.annotate(mes=TruncMonth("fecha")).values("mes").annotate(total=Sum("monto")):
+            totales_liq_tarjeta_mes[f["mes"].month - 1] = f["total"]
+        for f in qs_tarjetas_desg.annotate(mes=TruncMonth("fecha")).values("mes").annotate(total=Sum("monto")):
+            totales_desg_tarjeta_mes[f["mes"].month - 1] = f["total"]
+
+        totales_resto_tarjeta_mes = [
+            max(Decimal("0.00"), liq - desg)
+            for liq, desg in zip(totales_liq_tarjeta_mes, totales_desg_tarjeta_mes)
+        ]
+
+        total_anual_liq_tarjeta = sum(totales_liq_tarjeta_mes, Decimal("0.00"))
+        total_anual_desg_tarjeta = sum(totales_desg_tarjeta_mes, Decimal("0.00"))
+        total_anual_resto_tarjeta = max(Decimal("0.00"), total_anual_liq_tarjeta - total_anual_desg_tarjeta)
 
         # 3. Totales globales mes a mes
         resumen_global_meses = []
@@ -486,6 +561,12 @@ class FinanzasService:
             "total_anual_gastos": total_anual_gastos,
             "balance_anual": balance_anual,
             "ratio_ahorro_anual": ratio_ahorro_anual,
+            "totales_liq_tarjeta_mes": totales_liq_tarjeta_mes,
+            "totales_desg_tarjeta_mes": totales_desg_tarjeta_mes,
+            "totales_resto_tarjeta_mes": totales_resto_tarjeta_mes,
+            "total_anual_liq_tarjeta": total_anual_liq_tarjeta,
+            "total_anual_desg_tarjeta": total_anual_desg_tarjeta,
+            "total_anual_resto_tarjeta": total_anual_resto_tarjeta,
         }
 
     @classmethod

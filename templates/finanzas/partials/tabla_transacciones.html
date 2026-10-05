@@ -23,9 +23,20 @@
             <i data-lucide="plus" class="w-3 h-3 mr-1"></i> Ingreso
           </span>
           {% else %}
-          <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-            <i data-lucide="minus" class="w-3 h-3 mr-1"></i> Gasto
-          </span>
+          <div class="flex flex-col space-y-1">
+            <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+              <i data-lucide="minus" class="w-3 h-3 mr-1"></i> Gasto
+            </span>
+            {% if mov.medio_pago == 'TARJETA' %}
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-800" title="Desglose analítico de tarjeta (no duplica en total)">
+              <i data-lucide="credit-card" class="w-2.5 h-2.5 mr-1"></i> Tarjeta
+            </span>
+            {% elif mov.medio_pago == 'LIQUIDACION_TARJETA' %}
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800" title="Liquidación mensual global de tarjeta">
+              <i data-lucide="receipt" class="w-2.5 h-2.5 mr-1"></i> Liquidación
+            </span>
+            {% endif %}
+          </div>
           {% endif %}
         </td>
 

@@ -171,9 +171,10 @@ class GastoForm(forms.ModelForm):
 
     class Meta:
         model = Gasto
-        fields = ["categoria", "concepto", "elemento", "monto", "fecha", "es_fijo", "notas"]
+        fields = ["categoria", "concepto", "elemento", "monto", "fecha", "medio_pago", "es_fijo", "notas"]
         widgets = {
             "elemento": forms.Select(attrs={"class": SELECT_CLASSES}),
+            "medio_pago": forms.Select(attrs={"class": SELECT_CLASSES}),
             "monto": forms.NumberInput(
                 attrs={
                     "class": INPUT_CLASSES,
@@ -212,6 +213,28 @@ class GastoForm(forms.ModelForm):
         if cat_id is None:
             cat_id = self.initial.get("categoria")
 
+        # Configurar opciones de medio_pago según la categoría
+        es_cat_tarjeta = False
+        if cat_id:
+            cat_obj = Categoria.objects.filter(id=cat_id).first()
+            if cat_obj and ("tarjeta" in cat_obj.nombre.lower() or cat_obj.tipo == Categoria.Tipo.ESPECIAL_TARJETA):
+                es_cat_tarjeta = True
+
+        self.fields["medio_pago"].required = False
+        if es_cat_tarjeta:
+            self.fields["medio_pago"].choices = [
+                (Gasto.MedioPago.LIQUIDACION_TARJETA, "💳 Liquidación mensual de Tarjeta"),
+            ]
+            self.fields["medio_pago"].initial = Gasto.MedioPago.LIQUIDACION_TARJETA
+        else:
+            self.fields["medio_pago"].choices = [
+                (Gasto.MedioPago.DOMICILIADO, "🏦 Domiciliado / Cargo en cuenta"),
+                (Gasto.MedioPago.TARJETA, "💳 Pagado con Tarjeta (desglose analítico - no duplica)"),
+                (Gasto.MedioPago.EFECTIVO, "💵 Efectivo"),
+            ]
+            if not self.instance or not self.instance.pk:
+                self.fields["medio_pago"].initial = Gasto.MedioPago.DOMICILIADO
+
         # Los elementos finalizados no deben poder usarse para nuevos gastos,
         # salvo el elemento ya asociado cuando se edita un gasto existente.
         ids_extra: list = []
@@ -241,8 +264,16 @@ class GastoForm(forms.ModelForm):
         concepto = (cleaned.get("concepto") or "").strip()
         categoria = cleaned.get("categoria")
         elemento = cleaned.get("elemento")
-        es_tarjeta = bool(categoria and "tarjeta" in categoria.nombre.lower())
+        es_tarjeta = bool(
+            categoria and ("tarjeta" in categoria.nombre.lower() or categoria.tipo == Categoria.Tipo.ESPECIAL_TARJETA)
+        )
         es_recurrente = bool(elemento and elemento.es_fijo)
+
+        medio_pago = cleaned.get("medio_pago")
+        if es_tarjeta:
+            cleaned["medio_pago"] = Gasto.MedioPago.LIQUIDACION_TARJETA
+        elif not medio_pago or medio_pago == Gasto.MedioPago.LIQUIDACION_TARJETA:
+            cleaned["medio_pago"] = Gasto.MedioPago.DOMICILIADO
 
         # La recurrencia la define el elemento: si es un compromiso fijo, el gasto lo es también
         if es_recurrente:

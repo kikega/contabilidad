@@ -24,6 +24,11 @@
         <span class="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
           Gastos: -{{ resumen_anual.total_anual_gastos|floatformat:2 }} €
         </span>
+        {% if resumen_anual.total_anual_liq_tarjeta > 0 %}
+        <span class="px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" title="Liquidación anual de tarjetas: {{ resumen_anual.total_anual_liq_tarjeta|floatformat:2 }} € (desglosado en compras: {{ resumen_anual.total_anual_desg_tarjeta|floatformat:2 }} € | resto sin clasificar: {{ resumen_anual.total_anual_resto_tarjeta|floatformat:2 }} €)">
+          <i data-lucide="credit-card" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i> Tarjetas: {{ resumen_anual.total_anual_liq_tarjeta|floatformat:2 }} €
+        </span>
+        {% endif %}
         <span class="px-3 py-1.5 rounded-xl {% if resumen_anual.balance_anual >= 0 %}bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800{% else %}bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800{% endif %}">
           Balance: {% if resumen_anual.balance_anual > 0 %}+{% endif %}{{ resumen_anual.balance_anual|floatformat:2 }} € ({{ resumen_anual.ratio_ahorro_anual }}% ahorro)
         </span>
@@ -113,7 +118,10 @@
           <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
             <td class="px-4 py-3 whitespace-nowrap sticky left-0 z-10 bg-white/95 dark:bg-slate-900/95 font-bold text-rose-600 dark:text-rose-400 flex items-center space-x-2 border-r border-slate-200/60 dark:border-slate-800/60">
               <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
-              <span>Total Gastos</span>
+              <div class="flex flex-col">
+                <span>Total Gastos</span>
+                <span class="text-[9px] text-slate-400 font-normal">Reales sin duplicar tarjetas</span>
+              </div>
             </td>
             {% for item in resumen_anual.resumen_global_meses %}
             <td 
@@ -360,7 +368,13 @@
               <span>{{ cat_data.categoria.nombre }}</span>
               <span class="text-[11px] font-normal text-slate-400">({{ cat_data.elementos|length }} elementos)</span>
             </h3>
-            <p class="text-[11px] text-slate-400 mt-0.5">{{ cat_data.categoria.descripcion|default:"Gastos estructurados en conceptos" }}</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">
+              {% if "tarjeta" in cat_data.categoria.nombre|lower %}
+                Liquidación global bancaria &bull; <span class="text-cyan-600 dark:text-cyan-400 font-semibold">Desglosado en compras: {{ resumen_anual.total_anual_desg_tarjeta|floatformat:2 }} €</span> &bull; <span class="text-slate-500 font-medium">Resto: {{ resumen_anual.total_anual_resto_tarjeta|floatformat:2 }} €</span>
+              {% else %}
+                {{ cat_data.categoria.descripcion|default:"Gastos estructurados en conceptos" }}
+              {% endif %}
+            </p>
           </div>
         </div>
 
