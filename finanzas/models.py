@@ -73,8 +73,17 @@ class Categoria(models.Model):
         return f"{self.nombre} ({self.get_tipo_display()})"
 
 
+class MedioPago(models.TextChoices):
+    DOMICILIADO = "DOMICILIADO", _("Domiciliado / Cargo en cuenta")
+    TARJETA = "TARJETA", _("Pagado con Tarjeta (desglose)")
+    LIQUIDACION_TARJETA = "LIQUIDACION_TARJETA", _("Liquidación mensual de Tarjeta")
+    EFECTIVO = "EFECTIVO", _("Efectivo")
+
+
 class Elemento(models.Model):
     """Concepto o subcategoría específica perteneciente a una Categoría (ej: Electricidad, Agua, Movistar, Gasolina...)."""
+
+    MedioPago = MedioPago
 
     categoria = models.ForeignKey(
         Categoria,
@@ -83,6 +92,16 @@ class Elemento(models.Model):
         verbose_name=_("categoría"),
     )
     nombre = models.CharField(_("nombre del elemento"), max_length=100)
+    medio_pago = models.CharField(
+        _("medio de pago habitual"),
+        max_length=25,
+        choices=MedioPago.choices,
+        default=MedioPago.DOMICILIADO,
+        blank=True,
+        help_text=_(
+            "Forma de pago por defecto para este concepto (se aplicará automáticamente al registrar un gasto)."
+        ),
+    )
     es_fijo = models.BooleanField(
         _("es gasto/ingreso fijo"),
         default=False,
@@ -188,11 +207,7 @@ class Ingreso(models.Model):
 class Gasto(models.Model):
     """Registro de gastos periódicos y desembolsos de la unidad familiar."""
 
-    class MedioPago(models.TextChoices):
-        DOMICILIADO = "DOMICILIADO", _("Domiciliado / Cargo en cuenta")
-        TARJETA = "TARJETA", _("Pagado con Tarjeta (desglose)")
-        LIQUIDACION_TARJETA = "LIQUIDACION_TARJETA", _("Liquidación mensual de Tarjeta")
-        EFECTIVO = "EFECTIVO", _("Efectivo")
+    MedioPago = MedioPago
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -67,12 +67,22 @@ class ElementoForm(forms.ModelForm):
 
     class Meta:
         model = Elemento
-        fields = ["categoria", "nombre", "es_fijo", "finalizado", "fecha_finalizacion", "icono", "descripcion"]
+        fields = [
+            "categoria",
+            "nombre",
+            "medio_pago",
+            "es_fijo",
+            "finalizado",
+            "fecha_finalizacion",
+            "icono",
+            "descripcion",
+        ]
         widgets = {
             "categoria": forms.Select(attrs={"class": SELECT_CLASSES}),
             "nombre": forms.TextInput(
                 attrs={"class": INPUT_CLASSES, "placeholder": "Ej: Electricidad, Agua, Comunidad propietarios, Gasolina..."}
             ),
+            "medio_pago": forms.Select(attrs={"class": SELECT_CLASSES}),
             "es_fijo": forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
             "finalizado": forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
             "fecha_finalizacion": forms.DateInput(
@@ -92,8 +102,13 @@ class ElementoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if "fecha_finalizacion" in self.fields:
             self.fields["fecha_finalizacion"].input_formats = DATE_INPUT_FORMATS
+        if "medio_pago" in self.fields:
+            self.fields["medio_pago"].required = False
         if tipo:
             self.fields["categoria"].queryset = Categoria.objects.filter(tipo=tipo)
+
+    def clean_medio_pago(self) -> str:
+        return self.cleaned_data.get("medio_pago") or Elemento.MedioPago.DOMICILIADO
 
 
 class IngresoForm(forms.ModelForm):
@@ -221,19 +236,12 @@ class GastoForm(forms.ModelForm):
                 es_cat_tarjeta = True
 
         self.fields["medio_pago"].required = False
-        if es_cat_tarjeta:
-            self.fields["medio_pago"].choices = [
-                (Gasto.MedioPago.LIQUIDACION_TARJETA, "💳 Liquidación mensual de Tarjeta"),
-            ]
-            self.fields["medio_pago"].initial = Gasto.MedioPago.LIQUIDACION_TARJETA
-        else:
-            self.fields["medio_pago"].choices = [
-                (Gasto.MedioPago.DOMICILIADO, "🏦 Domiciliado / Cargo en cuenta"),
-                (Gasto.MedioPago.TARJETA, "💳 Pagado con Tarjeta (desglose analítico - no duplica)"),
-                (Gasto.MedioPago.EFECTIVO, "💵 Efectivo"),
-            ]
-            if not self.instance or not self.instance.pk:
-                self.fields["medio_pago"].initial = Gasto.MedioPago.DOMICILIADO
+        self.fields["medio_pago"].choices = [
+            (Gasto.MedioPago.DOMICILIADO, "🏦 Domiciliado / Cargo en cuenta"),
+            (Gasto.MedioPago.TARJETA, "💳 Pagado con Tarjeta (desglose analítico - no duplica)"),
+            (Gasto.MedioPago.LIQUIDACION_TARJETA, "💳 Liquidación mensual de Tarjeta"),
+            (Gasto.MedioPago.EFECTIVO, "💵 Efectivo"),
+        ]
 
         # Los elementos finalizados no deben poder usarse para nuevos gastos,
         # salvo el elemento ya asociado cuando se edita un gasto existente.
@@ -248,16 +256,25 @@ class GastoForm(forms.ModelForm):
             qs = qs.filter(categoria_id=cat_id)
         self.fields["elemento"].queryset = qs.order_by("categoria__nombre", "nombre")
 
-        # Si el elemento seleccionado ya es un compromiso recurrente (es_fijo),
-        # el gasto se marca como fijo automáticamente: no hace falta preguntarlo.
+        # Configuración inicial para nuevos gastos según el elemento
         if not (self.instance and self.instance.pk):
             elem_id = self.data.get("elemento") if self.data else None
             if not elem_id:
                 elem_id = self.initial.get("elemento")
                 if hasattr(elem_id, "pk"):
                     elem_id = elem_id.pk
-            if elem_id and Elemento.objects.filter(id=elem_id, es_fijo=True).exists():
-                self.fields["es_fijo"].initial = True
+            elem_obj = Elemento.objects.filter(id=elem_id).first() if elem_id else None
+            if elem_obj:
+                if elem_obj.es_fijo:
+                    self.fields["es_fijo"].initial = True
+                if elem_obj.medio_pago:
+                    self.fields["medio_pago"].initial = elem_obj.medio_pago
+            elif es_cat_tarjeta:
+                self.fields["medio_pago"].initial = Gasto.MedioPago.LIQUIDACION_TARJETA
+            else:
+                self.fields["medio_pago"].initial = Gasto.MedioPago.DOMICILIADO
+        else:
+            self.fields["medio_pago"].initial = self.instance.medio_pago
 
     def clean(self) -> Dict[str, Any]:
         cleaned = super().clean()
@@ -272,8 +289,17 @@ class GastoForm(forms.ModelForm):
         medio_pago = cleaned.get("medio_pago")
         if es_tarjeta:
             cleaned["medio_pago"] = Gasto.MedioPago.LIQUIDACION_TARJETA
-        elif not medio_pago or medio_pago == Gasto.MedioPago.LIQUIDACION_TARJETA:
-            cleaned["medio_pago"] = Gasto.MedioPago.DOMICILIADO
+        elif not medio_pago:
+            if elemento and elemento.medio_pago:
+                cleaned["medio_pago"] = elemento.medio_pago
+            else:
+                cleaned["medio_pago"] = Gasto.MedioPago.DOMICILIADO
+        elif medio_pago == Gasto.MedioPago.LIQUIDACION_TARJETA and not es_tarjeta:
+            cleaned["medio_pago"] = (
+                elemento.medio_pago
+                if elemento and elemento.medio_pago != Gasto.MedioPago.LIQUIDACION_TARJETA
+                else Gasto.MedioPago.DOMICILIADO
+            )
 
         # La recurrencia la define el elemento: si es un compromiso fijo, el gasto lo es también
         if es_recurrente:

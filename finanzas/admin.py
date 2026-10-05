@@ -32,8 +32,8 @@ class CategoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Elemento)
 class ElementoAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "categoria", "es_fijo", "finalizado", "icono", "poliza_seguro_vinculada", "creado_en")
-    list_filter = ("categoria__tipo", "categoria", "es_fijo", "finalizado")
+    list_display = ("nombre", "categoria", "medio_pago", "es_fijo", "finalizado", "icono", "poliza_seguro_vinculada", "creado_en")
+    list_filter = ("categoria__tipo", "categoria", "medio_pago", "es_fijo", "finalizado")
     search_fields = ("nombre", "categoria__nombre", "descripcion")
     ordering = ("categoria", "nombre")
     autocomplete_fields = ["categoria"]

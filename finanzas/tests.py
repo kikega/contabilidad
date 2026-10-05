@@ -851,6 +851,112 @@ class FormatoFechaFormulariosTests(TestCase):
         self.assertIn("es_anio_actual", resumen)
 
 
+class ElementoMedioPagoWorkflowTests(TestCase):
+    """Verifica que el medio de pago se defina a nivel de Elemento y se propague automáticamente al Gasto."""
+
+    def setUp(self) -> None:
+        self.user = Usuario.objects.create_user(
+            email="medio_pago@familia.com",
+            first_name="Tester",
+            password="password123",
+        )
+        self.cat_hogar = Categoria.objects.create(
+            nombre="Gastos Hogar",
+            tipo=Categoria.Tipo.GASTO,
+        )
+        self.cat_super = Categoria.objects.create(
+            nombre="Supermercado",
+            tipo=Categoria.Tipo.GASTO,
+        )
+        self.cat_tarjeta = Categoria.objects.create(
+            nombre="Tarjetas de Crédito",
+            tipo=Categoria.Tipo.ESPECIAL_TARJETA,
+        )
+        self.elem_luz = Elemento.objects.create(
+            categoria=self.cat_hogar,
+            nombre="Electricidad Iberdrola",
+            medio_pago=Elemento.MedioPago.DOMICILIADO,
+        )
+        self.elem_mercadona = Elemento.objects.create(
+            categoria=self.cat_super,
+            nombre="Mercadona",
+            medio_pago=Elemento.MedioPago.TARJETA,
+        )
+        self.elem_tarjeta_ing = Elemento.objects.create(
+            categoria=self.cat_tarjeta,
+            nombre="Tarjeta ING",
+            medio_pago=Elemento.MedioPago.LIQUIDACION_TARJETA,
+        )
+
+    def test_elemento_default_medio_pago(self) -> None:
+        """Un elemento creado sin medio_pago explícito debe tener DOMICILIADO por defecto."""
+        elem = Elemento.objects.create(categoria=self.cat_hogar, nombre="Agua Canal")
+        self.assertEqual(elem.medio_pago, Elemento.MedioPago.DOMICILIADO)
+
+    def test_gasto_form_adopta_medio_pago_del_elemento(self) -> None:
+        """Al inicializar GastoForm con un elemento, initial['medio_pago'] toma el valor del elemento."""
+        from finanzas.forms import GastoForm
+
+        form_luz = GastoForm(initial={"categoria": self.cat_hogar.id, "elemento": self.elem_luz.id})
+        self.assertEqual(form_luz.fields["medio_pago"].initial, Elemento.MedioPago.DOMICILIADO)
+
+        form_super = GastoForm(initial={"categoria": self.cat_super.id, "elemento": self.elem_mercadona.id})
+        self.assertEqual(form_super.fields["medio_pago"].initial, Elemento.MedioPago.TARJETA)
+
+    def test_gasto_guarda_automaticamente_medio_pago_del_elemento_si_no_se_indica(self) -> None:
+        """Al guardar un gasto sin enviar medio_pago explícito, se asigna el del elemento."""
+        from finanzas.forms import GastoForm
+
+        form = GastoForm(data={
+            "categoria": self.cat_super.id,
+            "elemento": self.elem_mercadona.id,
+            "concepto": "Compra semanal",
+            "monto": "120.50",
+            "fecha": "10/05/2026",
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        gasto = form.save()
+        self.assertEqual(gasto.medio_pago, Elemento.MedioPago.TARJETA)
+
+    def test_gasto_permite_sobrescribir_medio_pago(self) -> None:
+        """El usuario puede cambiar el medio de pago a EFECTIVO aunque el elemento sea TARJETA."""
+        from finanzas.forms import GastoForm
+
+        form = GastoForm(data={
+            "categoria": self.cat_super.id,
+            "elemento": self.elem_mercadona.id,
+            "concepto": "Compra en efectivo",
+            "monto": "25.00",
+            "fecha": "12/05/2026",
+            "medio_pago": Elemento.MedioPago.EFECTIVO,
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        gasto = form.save()
+        self.assertEqual(gasto.medio_pago, Elemento.MedioPago.EFECTIVO)
+
+    def test_gasto_create_view_recibe_configuracion_medio_pago(self) -> None:
+        """La vista de creación incluye el campo medio_pago en elementos_por_categoria para el JS."""
+        client = Client()
+        client.force_login(self.user)
+        response = client.get(reverse("finanzas:gasto_create"))
+        self.assertEqual(response.status_code, 200)
+        config = response.context["gasto_config"]
+        elementos_super = config["elementos_por_categoria"][str(self.cat_super.id)]
+        elem_data = next(e for e in elementos_super if e["id"] == self.elem_mercadona.id)
+        self.assertEqual(elem_data["medio_pago"], Elemento.MedioPago.TARJETA)
+
+    def test_administracion_muestra_medio_pago_habitual(self) -> None:
+        """La tabla de elementos en administración muestra la insignia de medio de pago habitual."""
+        client = Client()
+        client.force_login(self.user)
+        response = client.get(reverse("finanzas:administracion"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Medio de Pago Habitual")
+        self.assertContains(response, "Tarjeta (desglose)")
+        self.assertContains(response, "Domiciliado")
+
+
+
 
 
 

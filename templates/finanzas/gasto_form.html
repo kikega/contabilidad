@@ -87,10 +87,26 @@
           Medio de Pago / Imputación *
         </label>
         {{ form.medio_pago }}
-        <p id="medio-pago-tarjeta-hint" class="hidden mt-2 text-xs text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/40 p-3 rounded-xl border border-cyan-200 dark:border-cyan-800">
-          <i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i>
-          <strong>Pagado con Tarjeta (desglose analítico):</strong> Se imputará a esta categoría para tu análisis pero <strong>no duplicará en el total de gastos del mes</strong> (ya que está contemplado en la liquidación de la tarjeta).
-        </p>
+        
+        <div id="medio-pago-tarjeta-hint" class="hidden mt-2 p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-xs text-purple-700 dark:text-purple-300">
+          <i data-lucide="credit-card" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i>
+          <strong>Pagado con Tarjeta (desglose analítico):</strong> Se imputará a esta categoría para tu análisis pero <strong>no duplica en el total mensual de gastos</strong> (ya está contemplado en la liquidación global de la tarjeta).
+        </div>
+
+        <div id="medio-pago-domiciliado-hint" class="hidden mt-2 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300">
+          <i data-lucide="building-2" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i>
+          <strong>Cargo Domiciliado / en Cuenta:</strong> Se computa directamente en el total de gastos del mes.
+        </div>
+
+        <div id="medio-pago-liquidacion-hint" class="hidden mt-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300">
+          <i data-lucide="credit-card" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i>
+          <strong>Liquidación mensual de Tarjeta:</strong> Cargo global de la tarjeta en la cuenta bancaria. Se computa en el total de gastos del mes.
+        </div>
+
+        <div id="medio-pago-efectivo-hint" class="hidden mt-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-700 dark:text-emerald-300">
+          <i data-lucide="banknote" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i>
+          <strong>Pago en Efectivo:</strong> Desembolso directo en metálico. Se suma al total de gastos del mes.
+        </div>
       </div>
 
       <div id="recurrente-field" class="flex items-center space-x-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800">
@@ -140,8 +156,10 @@
   const recurrenteHint = document.getElementById('recurrente-auto-hint');
   const esFijoCheck = document.getElementById('id_es_fijo');
   const medioPagoSelect = document.getElementById('id_medio_pago');
-  const medioPagoWrapper = document.getElementById('medio-pago-wrapper');
-  const medioPagoTarjetaHint = document.getElementById('medio-pago-tarjeta-hint');
+  const hintTarjeta = document.getElementById('medio-pago-tarjeta-hint');
+  const hintDomiciliado = document.getElementById('medio-pago-domiciliado-hint');
+  const hintLiquidacion = document.getElementById('medio-pago-liquidacion-hint');
+  const hintEfectivo = document.getElementById('medio-pago-efectivo-hint');
 
   const categoriasTarjeta = (config.categorias_tarjeta || []).map(Number);
   const esEdicion = {{ object.pk|yesno:"true,false" }};
@@ -199,45 +217,55 @@
     if (conceptoStar) conceptoStar.classList.toggle('hidden', auto);
   }
 
-  function actualizarMedioPago() {
+  function actualizarHintMedioPago() {
+    if (!medioPagoSelect) return;
+    const val = medioPagoSelect.value;
+    if (hintTarjeta) hintTarjeta.classList.toggle('hidden', val !== 'TARJETA');
+    if (hintDomiciliado) hintDomiciliado.classList.toggle('hidden', val !== 'DOMICILIADO');
+    if (hintLiquidacion) hintLiquidacion.classList.toggle('hidden', val !== 'LIQUIDACION_TARJETA');
+    if (hintEfectivo) hintEfectivo.classList.toggle('hidden', val !== 'EFECTIVO');
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function actualizarMedioPago(forzarDesdeElemento = false) {
+    if (!medioPagoSelect) return;
     const tarjeta = esTarjeta();
-    if (tarjeta) {
-      if (medioPagoWrapper) medioPagoWrapper.classList.add('hidden');
-      if (medioPagoSelect) medioPagoSelect.value = 'LIQUIDACION_TARJETA';
-    } else {
-      if (medioPagoWrapper) medioPagoWrapper.classList.remove('hidden');
-      if (medioPagoSelect && medioPagoSelect.value === 'LIQUIDACION_TARJETA') {
+    const el = elementoSeleccionado();
+
+    if (!esEdicion || forzarDesdeElemento) {
+      if (tarjeta) {
+        medioPagoSelect.value = 'LIQUIDACION_TARJETA';
+      } else if (el && el.medio_pago) {
+        medioPagoSelect.value = el.medio_pago;
+      } else {
         medioPagoSelect.value = 'DOMICILIADO';
       }
-      actualizarHintMedioPago();
     }
+    actualizarHintMedioPago();
   }
 
-  function actualizarHintMedioPago() {
-    if (medioPagoTarjetaHint && medioPagoSelect) {
-      const esTarjetaVal = medioPagoSelect.value === 'TARJETA';
-      medioPagoTarjetaHint.classList.toggle('hidden', !esTarjetaVal);
-    }
-  }
-
-  function actualizarTodo() {
+  function actualizarTodo(forzarDesdeElemento = false) {
     filtrarElementos();
     actualizarConcepto();
     actualizarRecurrente();
-    actualizarMedioPago();
+    actualizarMedioPago(forzarDesdeElemento);
   }
 
-  catSelect.addEventListener('change', actualizarTodo);
+  catSelect.addEventListener('change', function () {
+    actualizarTodo(true);
+  });
+
   elemSelect.addEventListener('change', function () {
     actualizarConcepto();
     actualizarRecurrente();
+    actualizarMedioPago(true);
   });
 
   if (medioPagoSelect) {
     medioPagoSelect.addEventListener('change', actualizarHintMedioPago);
   }
 
-  actualizarTodo();
+  actualizarTodo(false);
 })();
 </script>
 {% endblock %}

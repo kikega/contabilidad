@@ -464,7 +464,7 @@ class GastoFormContextMixin:
             .order_by("categoria__nombre", "nombre")
         ):
             elementos_por_categoria.setdefault(str(elem.categoria_id), []).append(
-                {"id": elem.id, "nombre": elem.nombre, "es_fijo": elem.es_fijo}
+                {"id": elem.id, "nombre": elem.nombre, "es_fijo": elem.es_fijo, "medio_pago": elem.medio_pago}
             )
         context["gasto_config"] = {
             "elementos_por_categoria": elementos_por_categoria,
@@ -497,10 +497,12 @@ class GastoCreateView(LoginRequiredMixin, GastoFormContextMixin, CreateView):
             if elem:
                 initial["elemento"] = elem.id
                 initial["categoria"] = elem.categoria_id
+                initial["medio_pago"] = elem.medio_pago
         elif cat_id:
             elem = Elemento.objects.filter(categoria_id=cat_id).first()
             if elem:
                 initial["elemento"] = elem.id
+                initial["medio_pago"] = elem.medio_pago
         return initial
 
     def get_success_url(self) -> str:
@@ -526,8 +528,11 @@ class GastoUpdateView(LoginRequiredMixin, GastoFormContextMixin, UpdateView):
 
     def get_initial(self) -> Dict[str, Any]:
         initial = super().get_initial()
-        if self.object and self.object.elemento_id:
-            initial["categoria"] = self.object.elemento.categoria_id
+        if self.object:
+            if self.object.elemento_id:
+                initial["categoria"] = self.object.elemento.categoria_id
+            if self.object.medio_pago:
+                initial["medio_pago"] = self.object.medio_pago
         return initial
 
     def get_success_url(self) -> str:
